@@ -2,35 +2,48 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+# Projet Next.js
+
+Démarrage rapide
+
+Prérequis
+
+- Node.js (v18+) et npm
+
+Installation
+
+```bash
+npm install
+```
+
+Lancer en développement
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Format & lint
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Extensions VSCode recommandées
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `esbenp.prettier-vscode`
+- `dbaeumer.vscode-eslint`
 
-## Learn More
+Installation rapide des extensions (optionnel, nécessite la commande `code` dans le PATH)
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+code --install-extension esbenp.prettier-vscode
+code --install-extension dbaeumer.vscode-eslint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Branches
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Utilisez `git flow` pour la gestion des branches. Installer puis initialiser :
 
-## Deploy on Vercel
+```bash
+git flow init
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Commandes courantes : `git flow feature start/finish`, `git flow release start/finish`, `git flow hotfix start/finish`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+https://docs.google.com/document/d/1e96i3482ejmOrp6mVbyArzM3GKUAEqaOq049kAuD3vc/edit?tab=t.0
