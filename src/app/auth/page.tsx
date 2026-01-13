@@ -4,6 +4,7 @@ import { getToken } from '@/lib/auth/token';
 import { useUserSession } from '@/lib/auth/userSession';
 import { Button, TextField, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { useState } from 'react';
 import { SubmitHandler, useForm } from 'react-hook-form';
 
 const Page = styled('div')({
@@ -45,6 +46,13 @@ const FieldError = styled('span')({
   color: '#c2410c',
 });
 
+const SwitchHint = styled(Typography)({
+  marginTop: '12px',
+  fontSize: '14px',
+  color: '#6b7280',
+  textAlign: 'center',
+});
+
 const SubmitButton = styled(Button)({
   marginTop: '8px',
   padding: '10px 16px',
@@ -58,36 +66,61 @@ const SubmitButton = styled(Button)({
 type Inputs = {
   login: string;
   password: string;
+  nom: string;
+  confirmPassword: string;
 };
 
 const AuthPage = () => {
-  const { signIn } = useAuth();
+  const [isConnection, setIsConnection] = useState<boolean>(true);
+  const { signIn, signUp } = useAuth();
   const { user } = useUserSession();
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<Inputs>();
-  const onSubmit: SubmitHandler<Inputs> = async (data) => {
-    await signIn(data.login, data.password);
-    console.log(user);
-    console.log(getToken());
+  const password = watch('password');
+  const onSubmit: SubmitHandler<Omit<Inputs, 'confirmPassword'>> = async (
+    data,
+  ) => {
+    if (isConnection) {
+      console.log('user');
+      await signIn(data.login, data.password);
+      console.log(user);
+      console.log(getToken());
+    } else {
+      console.log(data.nom);
+      await signUp(data.login, data.password, data.nom);
+      console.log(user);
+      console.log(getToken());
+    }
   };
   return (
     <Page>
       <Card>
-        <Title>Connexion</Title>
+        {isConnection ? <Title>Connexion</Title> : <Title>Inscription</Title>}
         <Form onSubmit={handleSubmit(onSubmit)}>
           <TextField
-            placeholder="login"
+            placeholder="Email"
             fullWidth
             size="small"
             {...register('login', { required: true })}
           />
           {errors.login && <FieldError>Ce champ est requis</FieldError>}
 
+          {!isConnection && (
+            <TextField
+              placeholder="Nom"
+              fullWidth
+              size="small"
+              {...register('nom', { required: true })}
+            />
+          )}
+          {errors.login && <FieldError>Ce champ est requis</FieldError>}
+
           <TextField
-            placeholder="password"
+            placeholder="Mot de passe"
             type="password"
             fullWidth
             size="small"
@@ -95,9 +128,42 @@ const AuthPage = () => {
           />
           {errors.password && <FieldError>Ce champ est requis</FieldError>}
 
+          {!isConnection && (
+            <TextField
+              placeholder="Confirmer le mot de passe"
+              type="password"
+              fullWidth
+              size="small"
+              {...register('confirmPassword', {
+                required: true,
+                validate: (value) =>
+                  value === password || 'Les champs ne sont pas identiques',
+              })}
+            />
+          )}
+          {errors.confirmPassword?.message && (
+            <FieldError>{errors.confirmPassword.message}</FieldError>
+          )}
+          {errors.confirmPassword?.type === 'required' && (
+            <FieldError>Ce champ est requis</FieldError>
+          )}
+
           <SubmitButton type="submit" variant="contained" fullWidth>
-            Se connecter
+            {isConnection ? 'Se connecter' : "S'inscrire"}
           </SubmitButton>
+
+          <SwitchHint>
+            {isConnection
+              ? "Vous n'avez pas encore de compte?"
+              : 'Vous avez déjà un compte ?'}
+          </SwitchHint>
+          <Button
+            variant="text"
+            onClick={() => setIsConnection(!isConnection)}
+            sx={{ textTransform: 'none' }}
+          >
+            {isConnection ? 'Inscrivez vous' : 'Connectez vous'}
+          </Button>
         </Form>
       </Card>
     </Page>
