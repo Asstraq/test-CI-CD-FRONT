@@ -1,4 +1,5 @@
 'use client';
+import { OAuthButtons } from '@/components/oauth-buttons';
 import { useAuth } from '@/hooks/useAuth';
 import { getToken } from '@/lib/auth/token';
 import { useUserSession } from '@/lib/auth/userSession';
@@ -90,7 +91,6 @@ const AuthPage = () => {
       console.log(user);
       console.log(getToken());
     } else {
-      console.log(data.nom);
       await signUp(data.login, data.password, data.nom);
       console.log(user);
       console.log(getToken());
@@ -151,6 +151,8 @@ const AuthPage = () => {
           <SubmitButton type="submit" variant="contained" fullWidth>
             {isConnection ? 'Se connecter' : "S'inscrire"}
           </SubmitButton>
+
+          <OAuthButtons />
 
           <SwitchHint>
             {isConnection

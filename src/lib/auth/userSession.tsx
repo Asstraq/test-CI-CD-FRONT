@@ -4,8 +4,6 @@ import { Role } from '@/enum/roles';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState } from 'react';
 
-//TODO: Enregistrer dans un contexte react plutôt qu'en local storage
-
 const STORAGE_KEY = 'user';
 
 export type SessionUser = {
@@ -13,7 +11,7 @@ export type SessionUser = {
     id?: string;
     email: string;
     role: Role;
-    name?: string;
+    nom?: string;
     avatarUrl?: URL;
     bio?: string;
   };
