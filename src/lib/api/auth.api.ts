@@ -2,7 +2,6 @@ import { api } from '@/lib/api/http';
 import { ResponseAPIUser } from '@/type/user';
 
 export type LoginResponse = { accessToken: string };
-export type MeResponse = { id: string; email: string; name?: string };
 
 export function login(email: string, password: string) {
   return api<ResponseAPIUser>('/auth/login', {
@@ -12,10 +11,10 @@ export function login(email: string, password: string) {
   });
 }
 
-export function register(email: string, password: string, name?: string) {
+export function register(email: string, password: string, nom?: string) {
   return api<ResponseAPIUser>('/auth/register', {
     method: 'POST',
-    body: { email, password, name },
+    body: { email, password, nom },
     auth: false,
   });
 }
