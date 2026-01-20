@@ -1,10 +1,9 @@
 'use client';
 import { OAuthButtons } from '@/components/oauth-buttons';
 import { useAuth } from '@/hooks/useAuth';
-import { getToken } from '@/lib/auth/token';
-import { useUserSession } from '@/lib/auth/userSession';
 import { Button, TextField, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { SubmitHandler, useForm } from 'react-hook-form';
 
@@ -74,7 +73,7 @@ type Inputs = {
 const AuthPage = () => {
   const [isConnection, setIsConnection] = useState<boolean>(true);
   const { signIn, signUp } = useAuth();
-  const { user } = useUserSession();
+  const router = useRouter();
   const {
     register,
     handleSubmit,
@@ -86,14 +85,15 @@ const AuthPage = () => {
     data,
   ) => {
     if (isConnection) {
-      console.log('user');
-      await signIn(data.login, data.password);
-      console.log(user);
-      console.log(getToken());
+      const user = await signIn(data.login, data.password);
+      if (user) {
+        router.push('/');
+      }
     } else {
-      await signUp(data.login, data.password, data.nom);
-      console.log(user);
-      console.log(getToken());
+      const user = await signUp(data.login, data.password, data.nom);
+      if (user) {
+        router.push('/');
+      }
     }
   };
   return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { UserSessionProvider } from '@/lib/auth/userSession';
+import { FavoritesProvider } from '@/lib/context/FavoritesContext';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v13-appRouter';
 import type { ReactNode } from 'react';
@@ -12,7 +13,9 @@ export function Providers({ children }: { children: ReactNode }) {
     <AppRouterCacheProvider options={{ key: 'css', prepend: true }}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <UserSessionProvider>{children}</UserSessionProvider>
+        <UserSessionProvider>
+          <FavoritesProvider>{children}</FavoritesProvider>
+        </UserSessionProvider>
       </ThemeProvider>
     </AppRouterCacheProvider>
   );
