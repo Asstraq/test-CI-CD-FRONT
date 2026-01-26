@@ -124,9 +124,22 @@ const AuthPage = () => {
             type="password"
             fullWidth
             size="small"
-            {...register('password', { required: true })}
+            {...register('password', {
+              required: 'Ce champ est requis',
+              validate: {
+                minLength: (value) =>
+                  value.length >= 8 || 'Doit contenir au moins 8 caractères',
+                hasUppercase: (value) =>
+                  /[A-Z]/.test(value) ||
+                  'Doit contenir au moins une lettre majuscule',
+                hasNumber: (value) =>
+                  /\d/.test(value) || 'Doit contenir au moins un nombre',
+              },
+            })}
           />
-          {errors.password && <FieldError>Ce champ est requis</FieldError>}
+          {errors.password && (
+            <FieldError>{errors.password.message}</FieldError>
+          )}
 
           {!isConnection && (
             <TextField
