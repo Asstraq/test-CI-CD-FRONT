@@ -31,12 +31,10 @@ export default function AlbumTracks({ tracks, album }: AlbumTracksProps) {
   const { user } = useAuth();
 
   const createTrackData = (track: AlbumTrack): AddTrackToPlaylistRequest => ({
-    trackId: track.id ?? '',
-    trackName: track.name,
-    albumId: album.id,
-    albumName: album.name,
-    albumImage: album.image ?? undefined,
-    artists: album.artists,
+    type: 'TRACK',
+    spotifyId: track.id ?? '',
+    title: track.name,
+    imageUrl: album.image ?? null,
   });
 
   return (

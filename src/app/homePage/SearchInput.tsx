@@ -1,6 +1,9 @@
 'use client';
 
 import { BACKEND_URL } from '@/lib/config';
+import { useAuth } from '@/hooks/useAuth';
+import LikeButton from '@/components/LikeButton';
+import type { AddTrackToPlaylistRequest } from '@/type/playlist';
 import {
   Avatar,
   Box,
@@ -46,11 +49,19 @@ function getSecondaryText(track: Track) {
 }
 
 export default function SearchInput() {
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>({
     loading: false,
     error: null,
     results: [],
+  });
+
+  const createTrackData = (track: Track): AddTrackToPlaylistRequest => ({
+    type: 'TRACK',
+    spotifyId: track.id ?? '',
+    title: track.name,
+    imageUrl: track.album?.image ?? null,
   });
 
   useEffect(() => {
@@ -114,7 +125,14 @@ export default function SearchInput() {
               const albumId = track.album?.id;
               const albumHref = albumId ? `/album/${albumId}` : undefined;
               return (
-                <ListItem key={track.id ?? `${getPrimaryText(track)}-${index}`}>
+                <ListItem
+                  key={track.id ?? `${getPrimaryText(track)}-${index}`}
+                  secondaryAction={
+                    user && track.id ? (
+                      <LikeButton track={createTrackData(track)} size="small" />
+                    ) : null
+                  }
+                >
                   <ListItemAvatar>
                     <Avatar
                       variant="rounded"

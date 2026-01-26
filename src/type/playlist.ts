@@ -1,5 +1,6 @@
 export type Track = {
   id: string;
+  spotifyId?: string;
   name: string;
   album?: {
     id?: string;
@@ -24,10 +25,8 @@ export type CreatePlaylistRequest = {
 };
 
 export type AddTrackToPlaylistRequest = {
-  trackId: string;
-  trackName: string;
-  albumId?: string;
-  albumName?: string;
-  albumImage?: string;
-  artists?: Array<{ name: string }>;
+  type: 'ALBUM' | 'TRACK';
+  spotifyId: string;
+  title: string;
+  imageUrl?: string | null;
 };

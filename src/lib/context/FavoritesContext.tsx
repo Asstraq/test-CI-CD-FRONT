@@ -1,6 +1,7 @@
 'use client';
 
 import * as PlaylistAPI from '@/lib/api/playlist.api';
+import { useUserSession } from '@/lib/auth/userSession';
 import type { AddTrackToPlaylistRequest, Playlist } from '@/type/playlist';
 import {
   createContext,
@@ -18,7 +19,7 @@ type FavoritesContextType = {
   loading: boolean;
   error: string | null;
   isInitialized: boolean;
-  isTrackLiked: (trackId: string) => boolean;
+  isTrackLiked: (spotifyId: string) => boolean;
   toggleLike: (track: AddTrackToPlaylistRequest) => Promise<boolean>;
   refreshFavorites: () => Promise<void>;
 };
@@ -28,6 +29,7 @@ const FavoritesContext = createContext<FavoritesContextType | undefined>(
 );
 
 export function FavoritesProvider({ children }: { children: ReactNode }) {
+  const { user } = useUserSession();
   const [favoritesPlaylist, setFavoritesPlaylist] = useState<Playlist | null>(
     null,
   );
@@ -51,24 +53,42 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      // Ensure we have a playlist to enable likes even if detail fetch fails.
       setFavoritesPlaylist(favorites);
+
+      try {
+        const detailed = await PlaylistAPI.getPlaylistById(favorites.id);
+        setFavoritesPlaylist(detailed);
+      } catch {
+        // Ignore detail fetch errors (public endpoint may not return private lists).
+      }
       setIsInitialized(true);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
       setIsInitialized(true);
+      setFavoritesPlaylist(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setFavoritesPlaylist(null);
+      setIsInitialized(true);
+      setError(null);
+      return;
+    }
     loadFavoritesPlaylist();
-  }, [loadFavoritesPlaylist]);
+  }, [loadFavoritesPlaylist, user]);
 
   const isTrackLiked = useCallback(
-    (trackId: string): boolean => {
+    (spotifyId: string): boolean => {
       if (!favoritesPlaylist?.tracks) return false;
-      return favoritesPlaylist.tracks.some((track) => track.id === trackId);
+      return favoritesPlaylist.tracks.some(
+        (track) => track.id === spotifyId || track.spotifyId === spotifyId,
+      );
     },
     [favoritesPlaylist],
   );
@@ -79,22 +99,66 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         throw new Error('Playlist non chargée');
       }
 
-      const isLiked = isTrackLiked(track.trackId);
+      const isLiked = isTrackLiked(track.spotifyId);
 
       try {
         if (isLiked) {
           const updated = await PlaylistAPI.removeTrackFromPlaylist(
             favoritesPlaylist.id,
-            track.trackId,
+            track.type,
+            track.spotifyId,
           );
-          setFavoritesPlaylist(updated);
+          if (updated?.tracks) {
+            setFavoritesPlaylist(updated);
+          } else {
+            setFavoritesPlaylist((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                tracks: (prev.tracks ?? []).filter(
+                  (item) =>
+                    item.id !== track.spotifyId &&
+                    item.spotifyId !== track.spotifyId,
+                ),
+              };
+            });
+          }
+          setError(null);
           return false;
         } else {
           const updated = await PlaylistAPI.addTrackToPlaylist(
             favoritesPlaylist.id,
             track,
           );
-          setFavoritesPlaylist(updated);
+          if (updated?.tracks) {
+            setFavoritesPlaylist(updated);
+          } else {
+            setFavoritesPlaylist((prev) => {
+              if (!prev) return prev;
+              const current = prev.tracks ?? [];
+              const exists = current.some(
+                (item) =>
+                  item.id === track.spotifyId ||
+                  item.spotifyId === track.spotifyId,
+              );
+              if (exists) return prev;
+              return {
+                ...prev,
+                tracks: [
+                  ...current,
+                  {
+                    id: track.spotifyId,
+                    spotifyId: track.spotifyId,
+                    name: track.title,
+                    album: {
+                      image: track.imageUrl ?? null,
+                    },
+                  },
+                ],
+              };
+            });
+          }
+          setError(null);
           return true;
         }
       } catch (err) {

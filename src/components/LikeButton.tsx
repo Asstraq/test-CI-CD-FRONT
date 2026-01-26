@@ -27,9 +27,10 @@ export default function LikeButton({
   } = useFavorites();
   const [isLoading, setIsLoading] = useState(false);
 
-  const liked = isTrackLiked(track.trackId);
+  const liked = isTrackLiked(track.spotifyId);
   const isDisabled =
     disabled || isLoading || loading || !isInitialized || !favoritesPlaylist;
+  const authError = error && /401|403|unauthorized|token|auth/i.test(error);
 
   const handleClick = async (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -52,10 +53,10 @@ export default function LikeButton({
       title={
         loading || !isInitialized
           ? 'Chargement...'
-          : error
+          : authError || !favoritesPlaylist
             ? 'Connexion requise'
-            : !favoritesPlaylist
-              ? 'Connexion requise'
+            : error
+              ? error
               : liked
                 ? 'Retirer des favoris'
                 : 'Ajouter aux favoris'
