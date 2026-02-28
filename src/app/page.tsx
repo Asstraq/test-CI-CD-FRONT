@@ -1,19 +1,6 @@
 'use client';
-import {
-  Box,
-  Button,
-  Container,
-  Paper,
-  Stack,
-  Typography,
-} from '@mui/material';
-import Link from 'next/link';
-
-const actions = [
-  { label: 'Connexion', href: '/auth', variant: 'contained' as const },
-  { label: 'Profil', href: '/profile', variant: 'outlined' as const },
-  { label: 'Contact', href: '#', variant: 'outlined' as const },
-];
+import SearchInput from '@/app/homePage/SearchInput';
+import { Box, Container, Paper, Stack, Typography } from '@mui/material';
 
 export default function Home() {
   return (
@@ -74,25 +61,7 @@ export default function Home() {
             <Typography sx={{ color: '#4a5568', maxWidth: 520 }}>
               Partagez votre expérience musicale...
             </Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              {actions.map((action) => (
-                <Button
-                  key={action.label}
-                  component={Link}
-                  href={action.href}
-                  variant={action.variant}
-                  sx={{
-                    px: 3,
-                    py: 1.25,
-                    borderRadius: 999,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                  }}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            </Stack>
+            <SearchInput />
           </Stack>
         </Paper>
       </Container>
