@@ -109,6 +109,14 @@ export default function SearchInput() {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Daft Punk, Eminem, Orelsan..."
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            backgroundColor: '#fff',
+          },
+          '& .MuiOutlinedInput-root.Mui-focused': {
+            backgroundColor: '#fff',
+          },
+        }}
         InputProps={{
           endAdornment: state.loading ? <CircularProgress size={18} /> : null,
         }}
