@@ -1,4 +1,5 @@
 export type FeedVisibility = 'PUBLIC' | 'FOLLOWERS';
+export type FeedMediaKind = 'TRACK' | 'ALBUM' | 'ARTIST';
 
 export type FeedUser = {
   id: string;
@@ -8,8 +9,16 @@ export type FeedUser = {
   avatarUrl: string;
 };
 
+export type FeedComment = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: FeedUser;
+};
+
 export type SharedTrackContent = {
   kind: 'TRACK';
+  spotifyId?: string;
   title: string;
   artist: string;
   album?: string;
@@ -18,6 +27,7 @@ export type SharedTrackContent = {
 
 export type SharedAlbumContent = {
   kind: 'ALBUM';
+  spotifyId?: string;
   title: string;
   artist: string;
   year?: number;
@@ -26,6 +36,7 @@ export type SharedAlbumContent = {
 
 export type SharedArtistContent = {
   kind: 'ARTIST';
+  spotifyId?: string;
   name: string;
   genres?: string[];
   imageUrl?: string;
@@ -38,6 +49,7 @@ export type FeedSharedContent =
 
 export type FeedShare = {
   id: string;
+  reviewId?: number;
   authorId: string;
   visibility: FeedVisibility;
   content: string;
@@ -46,4 +58,11 @@ export type FeedShare = {
   rating: number;
   likes: number;
   comments: number;
+  likedByMe?: boolean;
+  initialComments?: FeedComment[];
+};
+
+export type FeedEntry = {
+  share: FeedShare;
+  author: FeedUser;
 };

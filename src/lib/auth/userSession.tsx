@@ -2,7 +2,7 @@
 
 import { Role } from '@/enum/roles';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 const STORAGE_KEY = 'user';
 
@@ -40,11 +40,9 @@ function readStoredUser(): SessionUser | null {
 }
 
 export function UserSessionProvider({ children }: { children: ReactNode }) {
-  const [user, setUserState] = useState<SessionUser | null>(null);
-
-  useEffect(() => {
-    setUserState(readStoredUser());
-  }, []);
+  const [user, setUserState] = useState<SessionUser | null>(() =>
+    readStoredUser(),
+  );
 
   const setUser = (nextUser: SessionUser | null) => {
     setUserState(nextUser);

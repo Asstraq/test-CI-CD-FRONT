@@ -11,7 +11,7 @@ export default function BackToHomeButton() {
       variant="text"
       sx={{ textTransform: 'none', mb: 2 }}
     >
-      Retour a l'accueil
+      Retour a l&apos;accueil
     </Button>
   );
 }
