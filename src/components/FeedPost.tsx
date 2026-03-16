@@ -7,6 +7,7 @@ import {
   unlikeReview,
 } from '@/lib/api/feed-interactions.api';
 import { getToken } from '@/lib/auth/token';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { FeedComment, FeedShare, FeedUser } from '@/type/feed';
 import AlbumRoundedIcon from '@mui/icons-material/AlbumRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
@@ -104,6 +105,7 @@ export default function FeedPost({ share, author }: FeedPostProps) {
       : null;
   const content = share.content.trim();
   const authorInitial = author.name.trim().charAt(0).toUpperCase();
+  const authorHref = buildProfileHref(author);
   const isAuthenticated = Boolean(getToken());
   const reviewId = share.reviewId;
   const canInteract = isAuthenticated && typeof reviewId === 'number';
@@ -232,6 +234,80 @@ export default function FeedPost({ share, author }: FeedPostProps) {
     }
   };
 
+  const renderComment = (comment: FeedComment) => {
+    const commentAuthorHref = buildProfileHref(comment.author);
+
+    return (
+      <Stack
+        key={comment.id}
+        direction="row"
+        spacing={1.25}
+        alignItems="flex-start"
+      >
+        {commentAuthorHref ? (
+          <Link
+            href={commentAuthorHref}
+            style={{ color: 'inherit', textDecoration: 'none' }}
+          >
+            <Avatar
+              src={comment.author.avatarUrl || undefined}
+              alt={comment.author.name}
+              sx={{ width: 32, height: 32 }}
+            >
+              {comment.author.name.charAt(0).toUpperCase()}
+            </Avatar>
+          </Link>
+        ) : (
+          <Avatar
+            src={comment.author.avatarUrl || undefined}
+            alt={comment.author.name}
+            sx={{ width: 32, height: 32 }}
+          >
+            {comment.author.name.charAt(0).toUpperCase()}
+          </Avatar>
+        )}
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 1.25,
+            borderRadius: 2,
+            flex: 1,
+            borderColor: 'rgba(112, 130, 180, 0.18)',
+            backgroundColor: '#fafbff',
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center">
+            {commentAuthorHref ? (
+              <Typography
+                component={Link}
+                href={commentAuthorHref}
+                variant="body2"
+                sx={{
+                  fontWeight: 700,
+                  color: '#1b2130',
+                  textDecoration: 'none',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                {comment.author.name}
+              </Typography>
+            ) : (
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {comment.author.name}
+              </Typography>
+            )}
+            <Typography variant="caption" sx={{ color: '#75819a' }}>
+              {getDateLabel(comment.createdAt)}
+            </Typography>
+          </Stack>
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            {comment.content}
+          </Typography>
+        </Paper>
+      </Stack>
+    );
+  };
+
   return (
     <Paper
       elevation={0}
@@ -244,17 +320,45 @@ export default function FeedPost({ share, author }: FeedPostProps) {
     >
       <Stack spacing={2}>
         <Stack direction="row" spacing={1.5} alignItems="center">
-          <Avatar src={author.avatarUrl || undefined} alt={author.name}>
-            {authorInitial || 'U'}
-          </Avatar>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontWeight: 700, color: '#1b2130' }}>
-              {author.name}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#5c6780' }}>
-              {author.handle} · {getDateLabel(share.createdAt)}
-            </Typography>
-          </Box>
+          {authorHref ? (
+            <Link
+              href={authorHref}
+              style={{
+                minWidth: 0,
+                color: 'inherit',
+                textDecoration: 'none',
+                display: 'block',
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Avatar src={author.avatarUrl || undefined} alt={author.name}>
+                  {authorInitial || 'U'}
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 700, color: '#1b2130' }}>
+                    {author.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#5c6780' }}>
+                    {author.handle} · {getDateLabel(share.createdAt)}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Link>
+          ) : (
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Avatar src={author.avatarUrl || undefined} alt={author.name}>
+                {authorInitial || 'U'}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700, color: '#1b2130' }}>
+                  {author.name}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#5c6780' }}>
+                  {author.handle} · {getDateLabel(share.createdAt)}
+                </Typography>
+              </Box>
+            </Stack>
+          )}
           <Chip
             size="small"
             icon={
@@ -395,44 +499,7 @@ export default function FeedPost({ share, author }: FeedPostProps) {
               </Typography>
             ) : null}
 
-            {comments.map((comment) => (
-              <Stack
-                key={comment.id}
-                direction="row"
-                spacing={1.25}
-                alignItems="flex-start"
-              >
-                <Avatar
-                  src={comment.author.avatarUrl || undefined}
-                  alt={comment.author.name}
-                  sx={{ width: 32, height: 32 }}
-                >
-                  {comment.author.name.charAt(0).toUpperCase()}
-                </Avatar>
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    p: 1.25,
-                    borderRadius: 2,
-                    flex: 1,
-                    borderColor: 'rgba(112, 130, 180, 0.18)',
-                    backgroundColor: '#fafbff',
-                  }}
-                >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      {comment.author.name}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#75819a' }}>
-                      {getDateLabel(comment.createdAt)}
-                    </Typography>
-                  </Stack>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {comment.content}
-                  </Typography>
-                </Paper>
-              </Stack>
-            ))}
+            {comments.map(renderComment)}
 
             {canInteract ? (
               <Stack direction="row" spacing={1} alignItems="flex-end">
