@@ -1,5 +1,6 @@
 'use client';
 
+import SearchInput from '@/app/homePage/SearchInput';
 import FeedPost from '@/components/FeedPost';
 import { me as getMe } from '@/lib/api/auth.api';
 import { getFeed } from '@/lib/api/feed.api';
@@ -110,21 +111,27 @@ function buildOptimisticEntry(
   };
 }
 
+function getFeedEntryKey(entry: FeedEntry) {
+  if (typeof entry.share.reviewId === 'number') {
+    return `review-${entry.share.reviewId}`;
+  }
+
+  const spotifyId =
+    entry.share.shared.kind === 'ALBUM'
+      ? (entry.share.shared.spotifyId ?? '')
+      : '';
+  const authorKey =
+    entry.author.id || entry.author.email || entry.author.name.toLowerCase();
+
+  return `${authorKey}-${spotifyId}-${entry.share.content.trim().toLowerCase()}`;
+}
+
 function mergeFeedEntries(prev: FeedEntry[], next: FeedEntry[]) {
   const merged = next.map((entry) => {
-    const spotifyId =
-      entry.share.shared.kind === 'ALBUM' ? entry.share.shared.spotifyId : '';
-    const key = `${entry.author.id}-${spotifyId}-${entry.share.content.trim()}`;
-    const previous = prev.find((candidate) => {
-      const candidateSpotifyId =
-        candidate.share.shared.kind === 'ALBUM'
-          ? candidate.share.shared.spotifyId
-          : '';
-      return (
-        `${candidate.author.id}-${candidateSpotifyId}-${candidate.share.content.trim()}` ===
-        key
-      );
-    });
+    const key = getFeedEntryKey(entry);
+    const previous = prev.find(
+      (candidate) => getFeedEntryKey(candidate) === key,
+    );
 
     if (
       previous?.share.shared.kind === 'ALBUM' &&
@@ -148,18 +155,10 @@ function mergeFeedEntries(prev: FeedEntry[], next: FeedEntry[]) {
     return entry;
   });
 
-  const seen = new Set(
-    merged.map((entry) => {
-      const spotifyId =
-        entry.share.shared.kind === 'ALBUM' ? entry.share.shared.spotifyId : '';
-      return `${entry.author.id}-${spotifyId}-${entry.share.content.trim()}`;
-    }),
-  );
+  const seen = new Set(merged.map((entry) => getFeedEntryKey(entry)));
 
   for (const entry of prev) {
-    const spotifyId =
-      entry.share.shared.kind === 'ALBUM' ? entry.share.shared.spotifyId : '';
-    const key = `${entry.author.id}-${spotifyId}-${entry.share.content.trim()}`;
+    const key = getFeedEntryKey(entry);
     if (!seen.has(key)) merged.push(entry);
   }
 
@@ -688,15 +687,12 @@ export default function HomeFeedPage() {
               >
                 <Stack spacing={1.5}>
                   <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
-                    Activite du feed
+                    Recherche rapide
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#62708b' }}>
-                    Les interactions de likes et commentaires passent
-                    directement par les posts affiches ci-contre.
+                    Recherche Spotify disponible depuis la page d&apos;accueil.
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#62708b' }}>
-                    Le composeur d&apos;album se trouve au-dessus du feed.
-                  </Typography>
+                  <SearchInput />
                 </Stack>
               </Paper>
             </Stack>
