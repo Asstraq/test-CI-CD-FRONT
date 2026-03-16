@@ -189,7 +189,11 @@ export default function ProfilePage() {
                 ) : playlists.length > 0 ? (
                   <List sx={{ py: 0 }}>
                     {playlists.map((playlist) => (
-                      <ListItem key={playlist.id} disablePadding sx={{ mb: 0.5 }}>
+                      <ListItem
+                        key={playlist.id}
+                        disablePadding
+                        sx={{ mb: 0.5 }}
+                      >
                         <ListItemButton
                           onClick={() => setSelectedId(playlist.id)}
                           sx={{

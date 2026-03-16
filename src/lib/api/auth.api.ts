@@ -23,3 +23,9 @@ export function logout() {
   // si backend a un endpoint logout
   return api<{ ok: true }>('/auth/logout', { method: 'POST' });
 }
+
+export function me() {
+  return api<{ user: ResponseAPIUser['user'] } | ResponseAPIUser['user']>(
+    '/auth/me',
+  );
+}
