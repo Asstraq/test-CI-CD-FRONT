@@ -132,7 +132,11 @@ export default function ProfilePage() {
       try {
         setPlaylistLoading(true);
         const list = await PlaylistAPI.getPlaylistById(playlistId);
-        setSelectedPlaylist(list);
+        setSelectedPlaylist({
+          ...localPlaylist,
+          ...list,
+          visibility: list.visibility ?? localPlaylist?.visibility,
+        });
       } catch {
         setSelectedPlaylist(localPlaylist);
       } finally {
@@ -270,7 +274,14 @@ export default function ProfilePage() {
   };
 
   const selectedPlaylistVisibility =
-    displayedPlaylist?.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE';
+    (playlists.find((playlist) => playlist.id === selectedId)?.visibility ??
+      displayedPlaylist?.visibility) === 'PUBLIC'
+      ? 'PUBLIC'
+      : 'PRIVATE';
+
+  const selectedPlaylistForSettings =
+    playlists.find((playlist) => playlist.id === selectedId) ??
+    displayedPlaylist;
 
   const renderLinkedProfileName = (profile: SocialProfile) => {
     const href = buildProfileHref(profile);
@@ -627,7 +638,7 @@ export default function ProfilePage() {
                   {displayedPlaylist?.name ?? 'Sélectionnez une playlist'}
                 </Typography>
 
-                {displayedPlaylist ? (
+                {selectedPlaylistForSettings ? (
                   <Paper
                     variant="outlined"
                     sx={{
@@ -661,12 +672,13 @@ export default function ProfilePage() {
                           }
                           onClick={() =>
                             void handleUpdatePlaylistVisibility(
-                              displayedPlaylist,
+                              selectedPlaylistForSettings,
                               'PRIVATE',
                             )
                           }
                           disabled={
-                            playlistActionId === displayedPlaylist.id ||
+                            playlistActionId ===
+                              selectedPlaylistForSettings.id ||
                             selectedPlaylistVisibility === 'PRIVATE'
                           }
                         >
@@ -681,12 +693,13 @@ export default function ProfilePage() {
                           }
                           onClick={() =>
                             void handleUpdatePlaylistVisibility(
-                              displayedPlaylist,
+                              selectedPlaylistForSettings,
                               'PUBLIC',
                             )
                           }
                           disabled={
-                            playlistActionId === displayedPlaylist.id ||
+                            playlistActionId ===
+                              selectedPlaylistForSettings.id ||
                             selectedPlaylistVisibility === 'PUBLIC'
                           }
                         >

@@ -80,8 +80,10 @@ function normalizeTrack(entry: unknown): Track | null {
 }
 
 function normalizePlaylist(entry: unknown): Playlist | null {
-  const item = asRecord(entry);
-  if (!item) return null;
+  const source = asRecord(entry);
+  if (!source) return null;
+
+  const item = asRecord(source.list) ?? source;
 
   const owner =
     asRecord(item.owner) ?? asRecord(item.user) ?? asRecord(item.author);
@@ -179,9 +181,19 @@ export async function updatePlaylist(
   playlistId: string,
   data: UpdatePlaylistRequest,
 ): Promise<Playlist> {
+  const body: { name?: string; isPublic?: boolean } = {};
+
+  if (data.name) {
+    body.name = data.name;
+  }
+
+  if (data.visibility) {
+    body.isPublic = data.visibility === 'PUBLIC';
+  }
+
   const response = await api<unknown>(`/lists/${playlistId}`, {
     method: 'PATCH',
-    body: data,
+    body,
   });
 
   return normalizePlaylist(response) ?? { id: playlistId, name: 'Playlist' };
