@@ -1,13 +1,22 @@
 'use client';
 
 import * as PlaylistAPI from '@/lib/api/playlist.api';
+import { buildProfileHref } from '@/lib/profile/profileHref';
+import {
+  followUser,
+  getMyFollowers,
+  getMyFollowing,
+  type SocialProfile,
+} from '@/lib/api/social.api';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useUserSession } from '@/lib/auth/userSession';
-import type { Playlist } from '@/type/playlist';
+import type { Playlist, PlaylistVisibility } from '@/type/playlist';
 import {
+  Alert,
   Avatar,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
   Divider,
@@ -25,12 +34,40 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
+function getFollowerStorageKey(userId: string) {
+  return `profile_known_followers_${userId}`;
+}
+
+function readKnownFollowers(userId: string): string[] {
+  if (typeof window === 'undefined') return [];
+  const raw = localStorage.getItem(getFollowerStorageKey(userId));
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+function writeKnownFollowers(userId: string, followerIds: string[]) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(
+    getFollowerStorageKey(userId),
+    JSON.stringify(followerIds),
+  );
+}
 
 export default function ProfilePage() {
   const { user: userObject } = useUserSession();
   const user = userObject?.user;
-  const { favoritesPlaylist, loading: favoritesLoading } = useFavorites();
+  const {
+    favoritesPlaylist,
+    loading: favoritesLoading,
+    refreshFavorites,
+  } = useFavorites();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listsLoading, setListsLoading] = useState(false);
@@ -43,6 +80,15 @@ export default function ProfilePage() {
     description: '',
   });
   const [createOpen, setCreateOpen] = useState(false);
+  const [playlistActionId, setPlaylistActionId] = useState<string | null>(null);
+  const [playlistError, setPlaylistError] = useState('');
+  const [following, setFollowing] = useState<SocialProfile[]>([]);
+  const [followers, setFollowers] = useState<SocialProfile[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialError, setSocialError] = useState('');
+  const [socialActionId, setSocialActionId] = useState<string | null>(null);
+  const [newFollowers, setNewFollowers] = useState<SocialProfile[]>([]);
+  const [newFollowersOpen, setNewFollowersOpen] = useState(false);
 
   const favoritesId = favoritesPlaylist?.id ?? null;
   const isFavoritesSelected =
@@ -62,6 +108,7 @@ export default function ProfilePage() {
       setListsLoading(true);
       const { lists } = await PlaylistAPI.getUserPlaylists();
       setPlaylists(lists);
+      setSelectedPlaylist((prev) => prev ?? lists[0] ?? null);
 
       const defaultId =
         lists.find((list) => list.id === favoritesId)?.id ??
@@ -73,20 +120,77 @@ export default function ProfilePage() {
     }
   }, [favoritesId]);
 
-  const loadPlaylistById = useCallback(async (playlistId: string) => {
-    try {
-      setPlaylistLoading(true);
-      const list = await PlaylistAPI.getPlaylistById(playlistId);
-      setSelectedPlaylist(list);
-    } finally {
-      setPlaylistLoading(false);
-    }
-  }, []);
+  const loadPlaylistById = useCallback(
+    async (playlistId: string) => {
+      const localPlaylist =
+        playlists.find((playlist) => playlist.id === playlistId) ?? null;
+
+      if (localPlaylist) {
+        setSelectedPlaylist(localPlaylist);
+      }
+
+      try {
+        setPlaylistLoading(true);
+        const list = await PlaylistAPI.getPlaylistById(playlistId);
+        setSelectedPlaylist(list);
+      } catch {
+        setSelectedPlaylist(localPlaylist);
+      } finally {
+        setPlaylistLoading(false);
+      }
+    },
+    [playlists],
+  );
 
   useEffect(() => {
     if (!user) return;
     void loadPlaylists();
   }, [loadPlaylists, user]);
+
+  const loadSocialGraph = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      setSocialLoading(true);
+      setSocialError('');
+
+      const [myFollowing, myFollowers] = await Promise.all([
+        getMyFollowing(),
+        getMyFollowers(),
+      ]);
+
+      setFollowing(myFollowing);
+      setFollowers(myFollowers);
+
+      const knownFollowerIds = new Set(readKnownFollowers(user.id));
+      const unseenFollowers = myFollowers.filter(
+        (profile) => !knownFollowerIds.has(profile.id),
+      );
+
+      if (unseenFollowers.length > 0) {
+        setNewFollowers(unseenFollowers);
+        setNewFollowersOpen(true);
+      }
+
+      writeKnownFollowers(
+        user.id,
+        myFollowers.map((profile) => profile.id),
+      );
+    } catch (error) {
+      setSocialError(
+        error instanceof Error
+          ? error.message
+          : 'Impossible de charger les relations sociales.',
+      );
+    } finally {
+      setSocialLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void loadSocialGraph();
+  }, [loadSocialGraph, user?.id]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -105,6 +209,89 @@ export default function ProfilePage() {
     setCreateOpen(false);
     await loadPlaylists();
     setSelectedId(newList.id);
+  };
+
+  const followingIds = useMemo(
+    () => new Set(following.map((profile) => profile.id)),
+    [following],
+  );
+
+  const handleFollowBack = async (profile: SocialProfile) => {
+    try {
+      setSocialActionId(profile.id);
+      await followUser(profile.id);
+      await loadSocialGraph();
+    } finally {
+      setSocialActionId(null);
+    }
+  };
+
+  const applyUpdatedPlaylist = useCallback((updated: Playlist) => {
+    setPlaylists((prev) =>
+      prev.map((playlist) =>
+        playlist.id === updated.id ? { ...playlist, ...updated } : playlist,
+      ),
+    );
+    setSelectedPlaylist((prev) =>
+      prev?.id === updated.id ? { ...prev, ...updated } : prev,
+    );
+  }, []);
+
+  const handleUpdatePlaylistVisibility = async (
+    playlist: Playlist,
+    visibility: PlaylistVisibility,
+  ) => {
+    if (!playlist.id || playlistActionId) return;
+
+    setPlaylistActionId(playlist.id);
+    setPlaylistError('');
+
+    try {
+      const updated = await PlaylistAPI.updatePlaylist(playlist.id, {
+        visibility,
+      });
+      applyUpdatedPlaylist({
+        ...playlist,
+        ...updated,
+        visibility: updated.visibility ?? visibility,
+      });
+      if (favoritesId && playlist.id === favoritesId) {
+        await refreshFavorites();
+      }
+    } catch (error) {
+      setPlaylistError(
+        error instanceof Error
+          ? error.message
+          : 'Impossible de mettre a jour la visibilite de la playlist.',
+      );
+    } finally {
+      setPlaylistActionId(null);
+    }
+  };
+
+  const selectedPlaylistVisibility =
+    displayedPlaylist?.visibility === 'PUBLIC' ? 'PUBLIC' : 'PRIVATE';
+
+  const renderLinkedProfileName = (profile: SocialProfile) => {
+    const href = buildProfileHref(profile);
+
+    if (!href) return profile.name;
+
+    return (
+      <Typography
+        component={Link}
+        href={href}
+        variant="body1"
+        sx={{
+          fontWeight: 600,
+          color: '#1a1d24',
+          textDecoration: 'none',
+          '&:hover': { textDecoration: 'underline' },
+        }}
+      >
+        {profile.name}
+      </Typography>
+    );
   };
 
   return (
@@ -152,6 +339,186 @@ export default function ProfilePage() {
             </Stack>
 
             <Divider />
+
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={3}
+              alignItems="flex-start"
+            >
+              <Paper
+                variant="outlined"
+                sx={{
+                  flex: 1,
+                  width: '100%',
+                  borderRadius: 3,
+                  p: 2,
+                  bgcolor: 'rgba(248, 249, 255, 0.92)',
+                }}
+              >
+                <Stack spacing={1.5}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, color: '#1a1d24' }}
+                  >
+                    Personnes que je follow
+                  </Typography>
+
+                  {socialError ? (
+                    <Alert severity="error">{socialError}</Alert>
+                  ) : null}
+
+                  {socialLoading ? (
+                    <Box
+                      sx={{ display: 'flex', justifyContent: 'center', p: 2 }}
+                    >
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : following.length > 0 ? (
+                    <List sx={{ py: 0 }}>
+                      {following.map((profile) => {
+                        const followsBack = followers.some(
+                          (entry) => entry.id === profile.id,
+                        );
+                        const profileHref = buildProfileHref(profile);
+
+                        return (
+                          <ListItem
+                            key={`following-${profile.id}`}
+                            sx={{ px: 0 }}
+                          >
+                            <ListItemAvatar>
+                              {profileHref ? (
+                                <Link
+                                  href={profileHref}
+                                  style={{
+                                    color: 'inherit',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  <Avatar src={profile.avatarUrl || undefined}>
+                                    {profile.name.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                </Link>
+                              ) : (
+                                <Avatar src={profile.avatarUrl || undefined}>
+                                  {profile.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              )}
+                            </ListItemAvatar>
+                            <ListItemText
+                              primary={renderLinkedProfileName(profile)}
+                              secondary={profile.email || profile.handle}
+                            />
+                            {followsBack ? (
+                              <Chip label="Vous suit aussi" size="small" />
+                            ) : (
+                              <Chip
+                                label="Suivi simple"
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
+                          </ListItem>
+                        );
+                      })}
+                    </List>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Vous ne suivez encore personne.
+                    </Typography>
+                  )}
+                </Stack>
+              </Paper>
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  flex: 1,
+                  width: '100%',
+                  borderRadius: 3,
+                  p: 2,
+                  bgcolor: 'rgba(248, 249, 255, 0.92)',
+                }}
+              >
+                <Stack spacing={1.5}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, color: '#1a1d24' }}
+                  >
+                    Personnes qui me follow
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Suppression d&apos;un follower indisponible pour
+                    l&apos;instant: le backend n&apos;expose pas encore
+                    d&apos;endpoint dedie.
+                  </Typography>
+
+                  {socialLoading ? (
+                    <Box
+                      sx={{ display: 'flex', justifyContent: 'center', p: 2 }}
+                    >
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : followers.length > 0 ? (
+                    <List sx={{ py: 0 }}>
+                      {followers.map((profile) => {
+                        const isMutual = followingIds.has(profile.id);
+                        const profileHref = buildProfileHref(profile);
+
+                        return (
+                          <ListItem
+                            key={`follower-${profile.id}`}
+                            sx={{ px: 0 }}
+                          >
+                            <ListItemAvatar>
+                              {profileHref ? (
+                                <Link
+                                  href={profileHref}
+                                  style={{
+                                    color: 'inherit',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  <Avatar src={profile.avatarUrl || undefined}>
+                                    {profile.name.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                </Link>
+                              ) : (
+                                <Avatar src={profile.avatarUrl || undefined}>
+                                  {profile.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              )}
+                            </ListItemAvatar>
+                            <ListItemText
+                              primary={renderLinkedProfileName(profile)}
+                              secondary={profile.email || profile.handle}
+                            />
+                            {isMutual ? (
+                              <Chip label="Suivi mutuel" size="small" />
+                            ) : (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                onClick={() => void handleFollowBack(profile)}
+                                disabled={socialActionId === profile.id}
+                              >
+                                {socialActionId === profile.id
+                                  ? '...'
+                                  : 'Suivre en retour'}
+                              </Button>
+                            )}
+                          </ListItem>
+                        );
+                      })}
+                    </List>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      Aucun follower pour le moment.
+                    </Typography>
+                  )}
+                </Stack>
+              </Paper>
+            </Stack>
 
             <Stack
               direction={{ xs: 'column', md: 'row' }}
@@ -221,14 +588,24 @@ export default function ProfilePage() {
                               </Typography>
                             }
                             secondary={
-                              playlist.description ? (
+                              <Stack spacing={0.25}>
+                                {playlist.description ? (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {playlist.description}
+                                  </Typography>
+                                ) : null}
                                 <Typography
                                   variant="caption"
                                   color="text.secondary"
                                 >
-                                  {playlist.description}
+                                  {playlist.visibility === 'PUBLIC'
+                                    ? 'Publique'
+                                    : 'Privee'}
                                 </Typography>
-                              ) : null
+                              </Stack>
                             }
                           />
                         </ListItemButton>
@@ -249,6 +626,82 @@ export default function ProfilePage() {
                 >
                   {displayedPlaylist?.name ?? 'Sélectionnez une playlist'}
                 </Typography>
+
+                {displayedPlaylist ? (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      borderRadius: 3,
+                      backgroundColor: 'rgba(248, 249, 255, 0.92)',
+                    }}
+                  >
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1.5}
+                      alignItems={{ xs: 'flex-start', sm: 'center' }}
+                      justifyContent="space-between"
+                    >
+                      <Box>
+                        <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
+                          Visibilite de la playlist
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                          Choisissez si cette playlist est publique ou privee.
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant={
+                            selectedPlaylistVisibility === 'PRIVATE'
+                              ? 'contained'
+                              : 'outlined'
+                          }
+                          onClick={() =>
+                            void handleUpdatePlaylistVisibility(
+                              displayedPlaylist,
+                              'PRIVATE',
+                            )
+                          }
+                          disabled={
+                            playlistActionId === displayedPlaylist.id ||
+                            selectedPlaylistVisibility === 'PRIVATE'
+                          }
+                        >
+                          Privee
+                        </Button>
+                        <Button
+                          size="small"
+                          variant={
+                            selectedPlaylistVisibility === 'PUBLIC'
+                              ? 'contained'
+                              : 'outlined'
+                          }
+                          onClick={() =>
+                            void handleUpdatePlaylistVisibility(
+                              displayedPlaylist,
+                              'PUBLIC',
+                            )
+                          }
+                          disabled={
+                            playlistActionId === displayedPlaylist.id ||
+                            selectedPlaylistVisibility === 'PUBLIC'
+                          }
+                        >
+                          Publique
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                ) : null}
+
+                {playlistError ? (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    {playlistError}
+                  </Alert>
+                ) : null}
 
                 {displayedLoading ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -378,6 +831,94 @@ export default function ProfilePage() {
           >
             Créer
           </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={newFollowersOpen}
+        onClose={() => setNewFollowersOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nouveaux abonnes</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
+              Des personnes se sont abonnees a vous depuis votre derniere
+              visite.
+            </Typography>
+            {newFollowers.map((profile) => {
+              const isMutual = followingIds.has(profile.id);
+              const profileHref = buildProfileHref(profile);
+              return (
+                <Paper
+                  key={`new-follower-${profile.id}`}
+                  variant="outlined"
+                  sx={{ p: 1.5, borderRadius: 2 }}
+                >
+                  <Stack direction="row" spacing={1.25} alignItems="center">
+                    {profileHref ? (
+                      <Link
+                        href={profileHref}
+                        style={{ color: 'inherit', textDecoration: 'none' }}
+                      >
+                        <Avatar src={profile.avatarUrl || undefined}>
+                          {profile.name.charAt(0).toUpperCase()}
+                        </Avatar>
+                      </Link>
+                    ) : (
+                      <Avatar src={profile.avatarUrl || undefined}>
+                        {profile.name.charAt(0).toUpperCase()}
+                      </Avatar>
+                    )}
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      {profileHref ? (
+                        <Typography
+                          component={Link}
+                          href={profileHref}
+                          sx={{
+                            fontWeight: 700,
+                            color: '#1a1d24',
+                            textDecoration: 'none',
+                            display: 'block',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                          noWrap
+                        >
+                          {profile.name}
+                        </Typography>
+                      ) : (
+                        <Typography sx={{ fontWeight: 700 }} noWrap>
+                          {profile.name}
+                        </Typography>
+                      )}
+                      <Typography
+                        variant="body2"
+                        sx={{ color: '#64748b' }}
+                        noWrap
+                      >
+                        {profile.email || profile.handle}
+                      </Typography>
+                    </Box>
+                    {isMutual ? (
+                      <Chip label="Suivi mutuel" size="small" />
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => void handleFollowBack(profile)}
+                        disabled={socialActionId === profile.id}
+                      >
+                        {socialActionId === profile.id ? '...' : 'Suivre'}
+                      </Button>
+                    )}
+                  </Stack>
+                </Paper>
+              );
+            })}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNewFollowersOpen(false)}>Fermer</Button>
         </DialogActions>
       </Dialog>
     </Box>
