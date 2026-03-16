@@ -302,15 +302,16 @@ export default function HomeFeedPage() {
       try {
         const results = await searchUsers(userSearchQuery.trim());
         if (!active) return;
-        const currentId = user?.user.id;
+        const currentId = user?.user.id ? String(user.user.id) : null;
+        const currentEmail = user?.user.email ?? null;
         setUserSearch({
           loading: false,
           error: '',
           results: results.filter(
             (profile) =>
               profile.id &&
-              profile.id !== currentId &&
-              profile.email !== user?.user.email,
+              String(profile.id) !== currentId &&
+              profile.email !== currentEmail,
           ),
         });
       } catch (error) {

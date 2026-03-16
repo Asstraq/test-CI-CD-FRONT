@@ -18,6 +18,16 @@ function readString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function readId(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return undefined;
+}
+
 function normalizeAuthor(source: UnknownRecord | null): FeedUser {
   const name =
     readString(
@@ -32,7 +42,7 @@ function normalizeAuthor(source: UnknownRecord | null): FeedUser {
     name;
 
   return {
-    id: readString(source?.id, source?.userId, source?.email) ?? 'unknown-user',
+    id: readId(source?.id, source?.userId, source?.email) ?? 'unknown-user',
     email: readString(source?.email) ?? '',
     name,
     handle: handleBase.startsWith('@')
