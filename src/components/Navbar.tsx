@@ -35,6 +35,14 @@ export default function Navbar() {
             <>
               <Button
                 component={Link}
+                href="/messages"
+                variant="outlined"
+                sx={{ textTransform: 'none', borderRadius: 999 }}
+              >
+                Messages
+              </Button>
+              <Button
+                component={Link}
                 href="/profile"
                 variant="contained"
                 sx={{ textTransform: 'none', borderRadius: 999 }}

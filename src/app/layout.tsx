@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+import FloatingMessenger from '@/components/FloatingMessenger';
+import Navbar from '@/components/Navbar';
 import './globals.css';
 import { Providers } from './providers';
-import Navbar from '@/components/Navbar';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -30,6 +31,7 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           {children}
+          <FloatingMessenger />
         </Providers>
       </body>
     </html>
