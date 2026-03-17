@@ -1,10 +1,16 @@
 'use client';
 import { OAuthButtons } from '@/components/oauth-buttons';
 import { useAuth } from '@/hooks/useAuth';
-import { Button, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Button,
+  CircularProgress,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SubmitHandler, useForm } from 'react-hook-form';
 
 const Page = styled('div')({
@@ -72,28 +78,44 @@ type Inputs = {
 
 const AuthPage = () => {
   const [isConnection, setIsConnection] = useState<boolean>(true);
-  const { signIn, signUp } = useAuth();
+  const [authError, setAuthError] = useState('');
+  const { user, signIn, signUp, authLoading } = useAuth();
   const router = useRouter();
   const {
     register,
     handleSubmit,
+    reset,
     watch,
     formState: { errors },
   } = useForm<Inputs>();
   const password = watch('password');
+
+  useEffect(() => {
+    if (user) {
+      router.replace('/');
+    }
+  }, [router, user]);
+
   const onSubmit: SubmitHandler<Omit<Inputs, 'confirmPassword'>> = async (
     data,
   ) => {
-    if (isConnection) {
-      const user = await signIn(data.login, data.password);
-      if (user) {
-        router.push('/');
+    setAuthError('');
+    try {
+      if (isConnection) {
+        const nextUser = await signIn(data.login, data.password);
+        if (nextUser) {
+          router.replace('/');
+        }
+      } else {
+        const nextUser = await signUp(data.login, data.password, data.nom);
+        if (nextUser) {
+          router.replace('/');
+        }
       }
-    } else {
-      const user = await signUp(data.login, data.password, data.nom);
-      if (user) {
-        router.push('/');
-      }
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : 'Authentification impossible.',
+      );
     }
   };
   return (
@@ -101,6 +123,7 @@ const AuthPage = () => {
       <Card>
         {isConnection ? <Title>Connexion</Title> : <Title>Inscription</Title>}
         <Form onSubmit={handleSubmit(onSubmit)}>
+          {authError ? <Alert severity="error">{authError}</Alert> : null}
           <TextField
             placeholder="Email"
             fullWidth
@@ -161,8 +184,19 @@ const AuthPage = () => {
             <FieldError>Ce champ est requis</FieldError>
           )}
 
-          <SubmitButton type="submit" variant="contained" fullWidth>
-            {isConnection ? 'Se connecter' : "S'inscrire"}
+          <SubmitButton
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={authLoading}
+          >
+            {authLoading ? (
+              <CircularProgress size={18} sx={{ color: '#fff' }} />
+            ) : isConnection ? (
+              'Se connecter'
+            ) : (
+              "S'inscrire"
+            )}
           </SubmitButton>
 
           <OAuthButtons />
@@ -174,8 +208,13 @@ const AuthPage = () => {
           </SwitchHint>
           <Button
             variant="text"
-            onClick={() => setIsConnection(!isConnection)}
+            onClick={() => {
+              setIsConnection(!isConnection);
+              setAuthError('');
+              reset();
+            }}
             sx={{ textTransform: 'none' }}
+            disabled={authLoading}
           >
             {isConnection ? 'Inscrivez vous' : 'Connectez vous'}
           </Button>
