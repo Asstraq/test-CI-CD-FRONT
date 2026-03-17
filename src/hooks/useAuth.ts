@@ -1,18 +1,29 @@
 'use client';
 
 import * as Auth from '@/lib/api/auth.api';
-import { clearToken, setToken } from '@/lib/auth/token';
+import { clearToken, getToken, setToken } from '@/lib/auth/token';
 import { useUserSession } from '@/lib/auth/userSession';
 import type { User } from '@/type/user';
+import { useState } from 'react';
 
 export function useAuth() {
   const { user, setUser, clearUser } = useUserSession();
+  const [authLoading, setAuthLoading] = useState(false);
 
-  async function signIn(email: string, password: string): Promise<User> {
-    const response = await Auth.login(email, password);
+  function applySession(response: Awaited<ReturnType<typeof Auth.login>>) {
     setToken(response.token);
     setUser({ user: response.user });
     return response.user;
+  }
+
+  async function signIn(email: string, password: string): Promise<User> {
+    setAuthLoading(true);
+    try {
+      const response = await Auth.login(email, password);
+      return applySession(response);
+    } finally {
+      setAuthLoading(false);
+    }
   }
 
   async function signUp(
@@ -20,19 +31,28 @@ export function useAuth() {
     password: string,
     name?: string,
   ): Promise<User> {
-    const response = await Auth.register(email, password, name);
-    setToken(response.token);
-    setUser({ user: response.user });
-    return response.user;
+    setAuthLoading(true);
+    try {
+      const response = await Auth.register(email, password, name);
+      return applySession(response);
+    } finally {
+      setAuthLoading(false);
+    }
   }
 
   async function signOut() {
+    setAuthLoading(true);
     try {
-      await Auth.logout();
-    } catch {}
-    clearToken();
-    clearUser();
+      if (getToken()) {
+        await Auth.logout();
+      }
+    } catch {
+    } finally {
+      clearToken();
+      clearUser();
+      setAuthLoading(false);
+    }
   }
 
-  return { user, signIn, signUp, signOut };
+  return { user, signIn, signUp, signOut, authLoading };
 }

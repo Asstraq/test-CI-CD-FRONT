@@ -4,10 +4,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserSession } from '@/lib/auth/userSession';
 import { AppBar, Box, Button, Toolbar, Typography } from '@mui/material';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function Navbar() {
   const { user } = useUserSession();
-  const { signOut } = useAuth();
+  const { signOut, authLoading } = useAuth();
+  const router = useRouter();
 
   return (
     <AppBar
@@ -40,13 +42,15 @@ export default function Navbar() {
                 Profil
               </Button>
               <Button
-                component={Link}
-                href="/"
                 variant="outlined"
                 sx={{ textTransform: 'none', borderRadius: 999 }}
-                onClick={() => signOut()}
+                onClick={async () => {
+                  await signOut();
+                  router.replace('/auth');
+                }}
+                disabled={authLoading}
               >
-                Déconnexion
+                {authLoading ? 'Déconnexion...' : 'Déconnexion'}
               </Button>
             </>
           ) : (

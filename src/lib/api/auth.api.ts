@@ -1,8 +1,6 @@
 import { api } from '@/lib/api/http';
 import { ResponseAPIUser } from '@/type/user';
 
-export type LoginResponse = { accessToken: string };
-
 export function login(email: string, password: string) {
   return api<ResponseAPIUser>('/auth/login', {
     method: 'POST',
@@ -20,7 +18,6 @@ export function register(email: string, password: string, nom?: string) {
 }
 
 export function logout() {
-  // si backend a un endpoint logout
   return api<{ ok: true }>('/auth/logout', { method: 'POST' });
 }
 
