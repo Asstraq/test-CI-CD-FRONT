@@ -359,6 +359,12 @@ export default function MessagesInbox({
                 label="Votre message"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    void handleSendMessage();
+                  }
+                }}
                 multiline
                 minRows={1}
                 maxRows={4}
