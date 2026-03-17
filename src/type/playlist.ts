@@ -1,3 +1,5 @@
+export type PlaylistVisibility = 'PUBLIC' | 'PRIVATE';
+
 export type Track = {
   id: string;
   spotifyId?: string;
@@ -17,11 +19,21 @@ export type Playlist = {
   tracks?: Track[];
   createdAt?: string;
   updatedAt?: string;
+  ownerId?: string;
+  ownerName?: string;
+  ownerHandle?: string;
+  visibility?: PlaylistVisibility;
 };
 
 export type CreatePlaylistRequest = {
   name: string;
   description?: string;
+};
+
+export type UpdatePlaylistRequest = {
+  name?: string;
+  description?: string;
+  visibility?: PlaylistVisibility;
 };
 
 export type AddTrackToPlaylistRequest = {

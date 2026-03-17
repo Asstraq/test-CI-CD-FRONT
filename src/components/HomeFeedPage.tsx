@@ -6,11 +6,21 @@ import { me as getMe } from '@/lib/api/auth.api';
 import { getFeed } from '@/lib/api/feed.api';
 import { upsertReview } from '@/lib/api/reviews.api';
 import {
+  followUser,
+  getMyFollowers,
+  getMyFollowing,
+  getUserFollowing,
+  searchUsers,
+  unfollowUser,
+  type SocialProfile,
+} from '@/lib/api/social.api';
+import {
   searchSpotifyMedia,
   type MediaSearchResult,
 } from '@/lib/api/spotify.api';
 import { getToken } from '@/lib/auth/token';
 import { useUserSession } from '@/lib/auth/userSession';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { FeedEntry } from '@/type/feed';
 import {
   Alert,
@@ -47,6 +57,16 @@ type SearchState = {
   results: MediaSearchResult[];
 };
 
+type ProfileSearchState = {
+  loading: boolean;
+  error: string;
+  results: SocialProfile[];
+};
+
+type SuggestedProfile = SocialProfile & {
+  commonFollows: number;
+};
+
 const defaultComposerState: ComposerState = {
   query: '',
   selected: null,
@@ -61,110 +81,23 @@ const defaultSearchState: SearchState = {
   results: [],
 };
 
+const defaultProfileSearchState: ProfileSearchState = {
+  loading: false,
+  error: '',
+  results: [],
+};
+
+function shuffleArray<T>(items: T[]) {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+  return copy;
+}
+
 function isComposerValid(state: ComposerState) {
   return Boolean(state.selected?.spotifyId && state.content.trim());
-}
-
-function getAuthorName(
-  user: NonNullable<ReturnType<typeof useUserSession>['user']>,
-) {
-  return (
-    user.user.nom?.trim() || user.user.email.split('@')[0] || 'Utilisateur'
-  );
-}
-
-function buildOptimisticEntry(
-  currentUser: NonNullable<ReturnType<typeof useUserSession>['user']>,
-  selected: MediaSearchResult,
-  content: string,
-  rating: number | null,
-): FeedEntry {
-  const authorName = getAuthorName(currentUser);
-
-  return {
-    author: {
-      id: currentUser.user.id ?? currentUser.user.email,
-      email: currentUser.user.email,
-      name: authorName,
-      handle: `@${authorName.replace(/\s+/g, '').toLowerCase()}`,
-      avatarUrl: currentUser.user.avatarUrl?.toString() ?? '',
-    },
-    share: {
-      id: `optimistic-${selected.spotifyId}-${Date.now()}`,
-      reviewId: undefined,
-      authorId: currentUser.user.id ?? currentUser.user.email,
-      visibility: 'PUBLIC',
-      content,
-      createdAt: new Date().toISOString(),
-      rating: rating ?? 0,
-      likes: 0,
-      comments: 0,
-      shared: {
-        kind: 'ALBUM',
-        spotifyId: selected.spotifyId,
-        title: selected.title,
-        artist: selected.artist ?? 'Artiste inconnu',
-        year: selected.year,
-        imageUrl: selected.imageUrl,
-      },
-    },
-  };
-}
-
-function getFeedEntryKey(entry: FeedEntry) {
-  if (typeof entry.share.reviewId === 'number') {
-    return `review-${entry.share.reviewId}`;
-  }
-
-  const spotifyId =
-    entry.share.shared.kind === 'ALBUM'
-      ? (entry.share.shared.spotifyId ?? '')
-      : '';
-  const authorKey =
-    entry.author.id || entry.author.email || entry.author.name.toLowerCase();
-
-  return `${authorKey}-${spotifyId}-${entry.share.content.trim().toLowerCase()}`;
-}
-
-function mergeFeedEntries(prev: FeedEntry[], next: FeedEntry[]) {
-  const merged = next.map((entry) => {
-    const key = getFeedEntryKey(entry);
-    const previous = prev.find(
-      (candidate) => getFeedEntryKey(candidate) === key,
-    );
-
-    if (
-      previous?.share.shared.kind === 'ALBUM' &&
-      entry.share.shared.kind === 'ALBUM'
-    ) {
-      return {
-        ...entry,
-        share: {
-          ...entry.share,
-          shared: {
-            ...entry.share.shared,
-            artist:
-              entry.share.shared.artist === 'Artiste inconnu'
-                ? previous.share.shared.artist
-                : entry.share.shared.artist,
-          },
-        },
-      };
-    }
-
-    return entry;
-  });
-
-  const seen = new Set(merged.map((entry) => getFeedEntryKey(entry)));
-
-  for (const entry of prev) {
-    const key = getFeedEntryKey(entry);
-    if (!seen.has(key)) merged.push(entry);
-  }
-
-  return merged.sort(
-    (a, b) => +new Date(b.share.createdAt) - +new Date(a.share.createdAt),
-  );
 }
 
 export default function HomeFeedPage() {
@@ -181,6 +114,15 @@ export default function HomeFeedPage() {
   const [submitSuccess, setSubmitSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearch, setUserSearch] = useState<ProfileSearchState>(
+    defaultProfileSearchState,
+  );
+  const [following, setFollowing] = useState<SocialProfile[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestedProfile[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [socialError, setSocialError] = useState('');
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -225,7 +167,7 @@ export default function HomeFeedPage() {
       try {
         const nextFeed = await getFeed();
         if (!active) return;
-        setFeed((prev) => mergeFeedEntries(prev, nextFeed));
+        setFeed(nextFeed);
       } catch (error) {
         if (!active) return;
         setFeedError(
@@ -244,6 +186,207 @@ export default function HomeFeedPage() {
       active = false;
     };
   }, [canAccessFeed]);
+
+  useEffect(() => {
+    if (!canAccessFeed) return;
+    if (!userSearchQuery.trim()) {
+      setUserSearch(defaultProfileSearchState);
+      return;
+    }
+
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setUserSearch((prev) => ({ ...prev, loading: true, error: '' }));
+      try {
+        const results = await searchUsers(userSearchQuery.trim());
+        if (!active) return;
+        const currentId = user?.user.id ? String(user.user.id) : null;
+        const currentEmail = user?.user.email ?? null;
+        setUserSearch({
+          loading: false,
+          error: '',
+          results: results.filter(
+            (profile) =>
+              profile.id &&
+              String(profile.id) !== currentId &&
+              profile.email !== currentEmail,
+          ),
+        });
+      } catch (error) {
+        if (!active) return;
+        setUserSearch({
+          loading: false,
+          error:
+            error instanceof Error ? error.message : 'Recherche impossible.',
+          results: [],
+        });
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [canAccessFeed, user?.user.email, user?.user.id, userSearchQuery]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadSocialData() {
+      if (!canAccessFeed || !user?.user.id) {
+        setFollowing([]);
+        setSuggestions([]);
+        setSocialError('');
+        setSocialLoading(false);
+        return;
+      }
+
+      setSocialLoading(true);
+      setSocialError('');
+
+      try {
+        const currentUserId = String(user.user.id);
+        const currentUserEmail = user.user.email;
+        const [myFollowing, myFollowers] = await Promise.all([
+          getMyFollowing(),
+          getMyFollowers(),
+        ]);
+        if (!active) return;
+
+        setFollowing(myFollowing);
+
+        const candidateMap = new Map<string, SocialProfile>();
+        [...myFollowers, ...feed.map((entry) => entry.author)].forEach(
+          (profile) => {
+            if (
+              !profile.id ||
+              String(profile.id) === currentUserId ||
+              profile.email === currentUserEmail ||
+              profile.id === 'unknown-author' ||
+              profile.id === 'unknown-user'
+            )
+              return;
+            if (myFollowing.some((followed) => followed.id === profile.id))
+              return;
+            candidateMap.set(profile.id, profile);
+          },
+        );
+
+        const candidates = [...candidateMap.values()].slice(0, 8);
+        const myFollowingIds = new Set(
+          myFollowing.map((profile) => profile.id),
+        );
+
+        const suggestionEntries = await Promise.all(
+          candidates.map(async (candidate) => {
+            if (
+              !candidate.id ||
+              candidate.id === 'unknown-author' ||
+              candidate.id === 'unknown-user'
+            ) {
+              return {
+                ...candidate,
+                commonFollows: 0,
+              };
+            }
+
+            try {
+              const candidateFollowing = await getUserFollowing(candidate.id);
+              const commonFollows = candidateFollowing.filter((profile) =>
+                myFollowingIds.has(profile.id),
+              ).length;
+
+              return {
+                ...candidate,
+                commonFollows,
+              };
+            } catch {
+              return {
+                ...candidate,
+                commonFollows: 0,
+              };
+            }
+          }),
+        );
+
+        let finalSuggestions = suggestionEntries;
+
+        const hasCommonFollows = suggestionEntries.some(
+          (entry) => entry.commonFollows > 0,
+        );
+
+        if (!hasCommonFollows || suggestionEntries.length < 5) {
+          const fallbackQueries = shuffleArray(['a', 'e', 'i', 'o', 'u']).slice(
+            0,
+            3,
+          );
+          const fallbackUsers = (
+            await Promise.all(
+              fallbackQueries.map(async (query) => {
+                try {
+                  return await searchUsers(query);
+                } catch {
+                  return [];
+                }
+              }),
+            )
+          ).flat();
+
+          const knownIds = new Set(
+            finalSuggestions.map((profile) => profile.id),
+          );
+          const randomFallback = shuffleArray(fallbackUsers)
+            .filter((profile) => {
+              if (!profile.id || knownIds.has(profile.id)) return false;
+              if (String(profile.id) === currentUserId) return false;
+              if (profile.email === currentUserEmail) return false;
+              if (myFollowing.some((followed) => followed.id === profile.id))
+                return false;
+              return true;
+            })
+            .slice(0, Math.max(0, 5 - finalSuggestions.length))
+            .map((profile) => ({
+              ...profile,
+              commonFollows: 0,
+            }));
+
+          finalSuggestions = [...finalSuggestions, ...randomFallback];
+        }
+
+        if (!active) return;
+        const dedupedSuggestions = [
+          ...new Map(
+            finalSuggestions.map((profile) => [profile.id, profile]),
+          ).values(),
+        ];
+        setSuggestions(
+          dedupedSuggestions
+            .sort((a, b) => {
+              if (b.commonFollows !== a.commonFollows) {
+                return b.commonFollows - a.commonFollows;
+              }
+              return a.name.localeCompare(b.name);
+            })
+            .slice(0, 5),
+        );
+      } catch (error) {
+        if (!active) return;
+        setSocialError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible de charger les suggestions.',
+        );
+      } finally {
+        if (active) setSocialLoading(false);
+      }
+    }
+
+    void loadSocialData();
+
+    return () => {
+      active = false;
+    };
+  }, [canAccessFeed, feed, user?.user.email, user?.user.id]);
 
   useEffect(() => {
     if (!canAccessFeed) return;
@@ -303,7 +446,7 @@ export default function HomeFeedPage() {
 
     try {
       const nextFeed = await getFeed();
-      setFeed((prev) => mergeFeedEntries(prev, nextFeed));
+      setFeed(nextFeed);
     } catch (error) {
       setFeedError(
         error instanceof Error
@@ -312,6 +455,37 @@ export default function HomeFeedPage() {
       );
     } finally {
       setFeedLoading(false);
+    }
+  };
+
+  const followingIds = useMemo(
+    () => new Set(following.map((profile) => profile.id)),
+    [following],
+  );
+
+  const handleToggleFollow = async (profile: SocialProfile) => {
+    if (!canAccessFeed || followLoadingId) return;
+
+    const isFollowing = followingIds.has(profile.id);
+    setFollowLoadingId(profile.id);
+    setSocialError('');
+
+    try {
+      if (isFollowing) {
+        await unfollowUser(profile.id);
+        setFollowing((prev) => prev.filter((entry) => entry.id !== profile.id));
+      } else {
+        await followUser(profile.id);
+        setFollowing((prev) => [...prev, profile]);
+      }
+    } catch (error) {
+      setSocialError(
+        error instanceof Error
+          ? error.message
+          : 'Action sociale impossible pour le moment.',
+      );
+    } finally {
+      setFollowLoadingId(null);
     }
   };
 
@@ -359,14 +533,6 @@ export default function HomeFeedPage() {
         rating: form.rating,
         containsSpoilers: form.containsSpoilers,
       });
-
-      const optimisticEntry = buildOptimisticEntry(
-        user,
-        form.selected,
-        form.content.trim(),
-        form.rating,
-      );
-      setFeed((prev) => mergeFeedEntries(prev, [optimisticEntry]));
       setForm(defaultComposerState);
       setSearchState(defaultSearchState);
       setSubmitSuccess('Partage publie dans le feed.');
@@ -383,6 +549,8 @@ export default function HomeFeedPage() {
       setSubmitting(false);
     }
   };
+
+  const getProfileHref = (profile: SocialProfile) => buildProfileHref(profile);
 
   return (
     <Box
@@ -685,12 +853,247 @@ export default function HomeFeedPage() {
                   backgroundColor: 'rgba(255,255,255,0.85)',
                 }}
               >
-                <Stack spacing={1.5}>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
+                      Rechercher un profil
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#62708b' }}>
+                      Nom, prenom ou adresse mail.
+                    </Typography>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Trouver un utilisateur"
+                    value={userSearchQuery}
+                    onChange={(event) => setUserSearchQuery(event.target.value)}
+                    placeholder="jane@music.dev, Martin, Sarah..."
+                    InputProps={{
+                      endAdornment: userSearch.loading ? (
+                        <CircularProgress size={18} />
+                      ) : null,
+                    }}
+                  />
+                  {userSearch.error ? (
+                    <Alert severity="error">{userSearch.error}</Alert>
+                  ) : null}
+                  {userSearch.results.length > 0 ? (
+                    <Stack spacing={1}>
+                      {userSearch.results.slice(0, 5).map((profile) => {
+                        const profileHref = getProfileHref(profile);
+
+                        return (
+                          <Paper
+                            key={`search-${profile.id}`}
+                            variant="outlined"
+                            sx={{ p: 1.25, borderRadius: 2 }}
+                          >
+                            <Stack
+                              direction="row"
+                              spacing={1.25}
+                              alignItems="center"
+                            >
+                              {profileHref ? (
+                                <Link
+                                  href={profileHref}
+                                  style={{
+                                    color: 'inherit',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  <Avatar src={profile.avatarUrl || undefined}>
+                                    {profile.name.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                </Link>
+                              ) : (
+                                <Avatar src={profile.avatarUrl || undefined}>
+                                  {profile.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              )}
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                {profileHref ? (
+                                  <Typography
+                                    component={Link}
+                                    href={profileHref}
+                                    sx={{
+                                      fontWeight: 700,
+                                      color: '#1a1d24',
+                                      textDecoration: 'none',
+                                      display: 'block',
+                                      '&:hover': {
+                                        textDecoration: 'underline',
+                                      },
+                                    }}
+                                    noWrap
+                                  >
+                                    {profile.name}
+                                  </Typography>
+                                ) : (
+                                  <Typography sx={{ fontWeight: 700 }} noWrap>
+                                    {profile.name}
+                                  </Typography>
+                                )}
+                                <Typography
+                                  variant="body2"
+                                  sx={{ color: '#62708b' }}
+                                  noWrap
+                                >
+                                  {profile.email || profile.handle}
+                                </Typography>
+                              </Box>
+                              <Button
+                                size="small"
+                                variant={
+                                  followingIds.has(profile.id)
+                                    ? 'outlined'
+                                    : 'contained'
+                                }
+                                onClick={() => void handleToggleFollow(profile)}
+                                disabled={followLoadingId === profile.id}
+                              >
+                                {followLoadingId === profile.id
+                                  ? '...'
+                                  : followingIds.has(profile.id)
+                                    ? 'Suivi'
+                                    : 'Suivre'}
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  ) : null}
+
                   <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
-                    Recherche rapide
+                    Suggestions de profils
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#62708b' }}>
-                    Recherche Spotify disponible depuis la page d&apos;accueil.
+                    Les profils avec le plus d&apos;abonnements en commun
+                    remontent en premier.
+                  </Typography>
+                  {socialError ? (
+                    <Alert severity="error">{socialError}</Alert>
+                  ) : null}
+                  {socialLoading ? (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CircularProgress size={18} />
+                      <Typography variant="body2">
+                        Chargement des suggestions...
+                      </Typography>
+                    </Stack>
+                  ) : suggestions.length > 0 ? (
+                    <Stack spacing={1}>
+                      {suggestions.map((profile) => {
+                        const profileHref = getProfileHref(profile);
+
+                        return (
+                          <Paper
+                            key={`suggestion-${profile.id}`}
+                            variant="outlined"
+                            sx={{
+                              p: 1.25,
+                              borderRadius: 2,
+                              borderColor:
+                                profile.commonFollows > 0
+                                  ? 'rgba(37, 99, 235, 0.35)'
+                                  : 'rgba(112, 130, 180, 0.2)',
+                              background:
+                                profile.commonFollows > 0
+                                  ? 'linear-gradient(180deg, rgba(230,239,255,0.7) 0%, rgba(255,255,255,0.95) 100%)'
+                                  : 'rgba(255,255,255,0.95)',
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              spacing={1.25}
+                              alignItems="center"
+                            >
+                              {profileHref ? (
+                                <Link
+                                  href={profileHref}
+                                  style={{
+                                    color: 'inherit',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  <Avatar src={profile.avatarUrl || undefined}>
+                                    {profile.name.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                </Link>
+                              ) : (
+                                <Avatar src={profile.avatarUrl || undefined}>
+                                  {profile.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              )}
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                {profileHref ? (
+                                  <Typography
+                                    component={Link}
+                                    href={profileHref}
+                                    sx={{
+                                      fontWeight: 700,
+                                      color: '#1a1d24',
+                                      textDecoration: 'none',
+                                      display: 'block',
+                                      '&:hover': {
+                                        textDecoration: 'underline',
+                                      },
+                                    }}
+                                    noWrap
+                                  >
+                                    {profile.name}
+                                  </Typography>
+                                ) : (
+                                  <Typography sx={{ fontWeight: 700 }} noWrap>
+                                    {profile.name}
+                                  </Typography>
+                                )}
+                                <Typography
+                                  variant="body2"
+                                  sx={{ color: '#62708b' }}
+                                  noWrap
+                                >
+                                  {profile.handle}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: '#48607f' }}
+                                >
+                                  {profile.commonFollows > 0
+                                    ? `${profile.commonFollows} follow(s) en commun`
+                                    : 'Suggestion du reseau'}
+                                </Typography>
+                              </Box>
+                              <Button
+                                size="small"
+                                variant={
+                                  followingIds.has(profile.id)
+                                    ? 'outlined'
+                                    : 'contained'
+                                }
+                                onClick={() => void handleToggleFollow(profile)}
+                                disabled={followLoadingId === profile.id}
+                              >
+                                {followLoadingId === profile.id
+                                  ? '...'
+                                  : followingIds.has(profile.id)
+                                    ? 'Suivi'
+                                    : 'Suivre'}
+                              </Button>
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" sx={{ color: '#62708b' }}>
+                      Aucune suggestion disponible pour le moment.
+                    </Typography>
+                  )}
+
+                  <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
+                    Recherche rapide
                   </Typography>
                   <SearchInput />
                 </Stack>
