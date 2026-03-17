@@ -7,6 +7,42 @@ type UpsertReviewPayload = {
   containsSpoilers?: boolean;
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+type UpsertReviewResult = {
+  reviewId?: number;
+};
+
+function asRecord(value: unknown): UnknownRecord | null {
+  return value && typeof value === 'object' ? (value as UnknownRecord) : null;
+}
+
+function readNumber(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
+}
+
+function normalizeUpsertReviewResponse(response: unknown): UpsertReviewResult {
+  const root = asRecord(response);
+  const review =
+    asRecord(root?.review) ?? asRecord(root?.data) ?? asRecord(root?.item);
+
+  return {
+    reviewId: readNumber(
+      root?.reviewId,
+      root?.id,
+      review?.reviewId,
+      review?.id,
+    ),
+  };
+}
+
 function toApiKind(kind: FeedMediaKind): string {
   return kind.toLowerCase();
 }
@@ -37,7 +73,7 @@ export function upsertReview(
   kind: FeedMediaKind,
   spotifyId: string,
   payload: UpsertReviewPayload,
-) {
+): Promise<UpsertReviewResult> {
   const pathVariants = [
     `/reviews/media/${toApiKind(kind)}/${spotifyId}/review`,
     `/reviews/media/${kind}/${spotifyId}/review`,
@@ -47,10 +83,12 @@ export function upsertReview(
   let lastError: unknown;
 
   async function tryRequest(path: string, body: Record<string, unknown>) {
-    return api<unknown>(path, {
+    const response = await api<unknown>(path, {
       method: 'PUT',
       body,
     });
+
+    return normalizeUpsertReviewResponse(response);
   }
 
   return (async () => {

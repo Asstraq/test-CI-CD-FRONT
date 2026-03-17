@@ -100,108 +100,6 @@ function isComposerValid(state: ComposerState) {
   return Boolean(state.selected?.spotifyId && state.content.trim());
 }
 
-function getAuthorName(
-  user: NonNullable<ReturnType<typeof useUserSession>['user']>,
-) {
-  return (
-    user.user.nom?.trim() || user.user.email.split('@')[0] || 'Utilisateur'
-  );
-}
-
-function buildOptimisticEntry(
-  currentUser: NonNullable<ReturnType<typeof useUserSession>['user']>,
-  selected: MediaSearchResult,
-  content: string,
-  rating: number | null,
-): FeedEntry {
-  const authorName = getAuthorName(currentUser);
-
-  return {
-    author: {
-      id: currentUser.user.id ?? currentUser.user.email,
-      email: currentUser.user.email,
-      name: authorName,
-      handle: `@${authorName.replace(/\s+/g, '').toLowerCase()}`,
-      avatarUrl: currentUser.user.avatarUrl?.toString() ?? '',
-    },
-    share: {
-      id: `optimistic-${selected.spotifyId}-${Date.now()}`,
-      reviewId: undefined,
-      authorId: currentUser.user.id ?? currentUser.user.email,
-      visibility: 'PUBLIC',
-      content,
-      createdAt: new Date().toISOString(),
-      rating: rating ?? 0,
-      likes: 0,
-      comments: 0,
-      shared: {
-        kind: 'ALBUM',
-        spotifyId: selected.spotifyId,
-        title: selected.title,
-        artist: selected.artist ?? 'Artiste inconnu',
-        year: selected.year,
-        imageUrl: selected.imageUrl,
-      },
-    },
-  };
-}
-
-function getFeedEntryKey(entry: FeedEntry) {
-  if (typeof entry.share.reviewId === 'number') {
-    return `review-${entry.share.reviewId}`;
-  }
-
-  const spotifyId =
-    entry.share.shared.kind === 'ALBUM'
-      ? (entry.share.shared.spotifyId ?? '')
-      : '';
-  const authorKey =
-    entry.author.id || entry.author.email || entry.author.name.toLowerCase();
-
-  return `${authorKey}-${spotifyId}-${entry.share.content.trim().toLowerCase()}`;
-}
-
-function mergeFeedEntries(prev: FeedEntry[], next: FeedEntry[]) {
-  const merged = next.map((entry) => {
-    const key = getFeedEntryKey(entry);
-    const previous = prev.find(
-      (candidate) => getFeedEntryKey(candidate) === key,
-    );
-
-    if (
-      previous?.share.shared.kind === 'ALBUM' &&
-      entry.share.shared.kind === 'ALBUM'
-    ) {
-      return {
-        ...entry,
-        share: {
-          ...entry.share,
-          shared: {
-            ...entry.share.shared,
-            artist:
-              entry.share.shared.artist === 'Artiste inconnu'
-                ? previous.share.shared.artist
-                : entry.share.shared.artist,
-          },
-        },
-      };
-    }
-
-    return entry;
-  });
-
-  const seen = new Set(merged.map((entry) => getFeedEntryKey(entry)));
-
-  for (const entry of prev) {
-    const key = getFeedEntryKey(entry);
-    if (!seen.has(key)) merged.push(entry);
-  }
-
-  return merged.sort(
-    (a, b) => +new Date(b.share.createdAt) - +new Date(a.share.createdAt),
-  );
-}
-
 export default function HomeFeedPage() {
   const { user, setUser } = useUserSession();
   const hasToken = Boolean(getToken());
@@ -269,7 +167,7 @@ export default function HomeFeedPage() {
       try {
         const nextFeed = await getFeed();
         if (!active) return;
-        setFeed((prev) => mergeFeedEntries(prev, nextFeed));
+        setFeed(nextFeed);
       } catch (error) {
         if (!active) return;
         setFeedError(
@@ -548,7 +446,7 @@ export default function HomeFeedPage() {
 
     try {
       const nextFeed = await getFeed();
-      setFeed((prev) => mergeFeedEntries(prev, nextFeed));
+      setFeed(nextFeed);
     } catch (error) {
       setFeedError(
         error instanceof Error
@@ -635,14 +533,6 @@ export default function HomeFeedPage() {
         rating: form.rating,
         containsSpoilers: form.containsSpoilers,
       });
-
-      const optimisticEntry = buildOptimisticEntry(
-        user,
-        form.selected,
-        form.content.trim(),
-        form.rating,
-      );
-      setFeed((prev) => mergeFeedEntries(prev, [optimisticEntry]));
       setForm(defaultComposerState);
       setSearchState(defaultSearchState);
       setSubmitSuccess('Partage publie dans le feed.');

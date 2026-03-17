@@ -1,5 +1,5 @@
 type ProfileLinkInput = {
-  id?: string | null;
+  id?: string | number | null;
   name?: string | null;
   handle?: string | null;
   email?: string | null;
@@ -7,7 +7,12 @@ type ProfileLinkInput = {
 };
 
 export function buildProfileHref(profile: ProfileLinkInput): string | null {
-  const id = profile.id?.trim();
+  const id =
+    typeof profile.id === 'number'
+      ? String(profile.id)
+      : typeof profile.id === 'string'
+        ? profile.id.trim()
+        : '';
   if (!id || id === 'unknown-author' || id === 'unknown-user') return null;
 
   const params = new URLSearchParams();
