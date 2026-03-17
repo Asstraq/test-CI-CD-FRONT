@@ -1,6 +1,7 @@
 'use client';
 
 import { getMessageTimeLabel } from '@/components/messaging/floatingMessenger.utils';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { ConversationMessage, ConversationSummary } from '@/type/messages';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import {
@@ -14,6 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import Link from 'next/link';
 
 type FloatingMessengerConversationViewProps = {
   currentConversation: ConversationSummary;
@@ -36,6 +38,14 @@ export default function FloatingMessengerConversationView({
   onDraftChange,
   onSendMessage,
 }: FloatingMessengerConversationViewProps) {
+  const participantHref = buildProfileHref({
+    id: currentConversation.participant.id,
+    name: currentConversation.participant.name,
+    handle: currentConversation.participant.handle,
+    email: currentConversation.participant.email,
+    avatarUrl: currentConversation.participant.avatarUrl,
+  });
+
   return (
     <>
       <Divider />
@@ -81,17 +91,55 @@ export default function FloatingMessengerConversationView({
                       alignItems="center"
                       sx={{ mb: 0.5 }}
                     >
-                      <Avatar
-                        src={
-                          currentConversation.participant.avatarUrl || undefined
-                        }
-                        sx={{ width: 20, height: 20 }}
-                      >
-                        {message.sender.name.charAt(0).toUpperCase()}
-                      </Avatar>
-                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                        {message.sender.name}
-                      </Typography>
+                      {participantHref ? (
+                        <>
+                          <Avatar
+                            component={Link}
+                            href={participantHref}
+                            src={
+                              currentConversation.participant.avatarUrl ||
+                              undefined
+                            }
+                            sx={{
+                              width: 20,
+                              height: 20,
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {message.sender.name.charAt(0).toUpperCase()}
+                          </Avatar>
+                          <Typography
+                            component={Link}
+                            href={participantHref}
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: 'inherit',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {message.sender.name}
+                          </Typography>
+                        </>
+                      ) : (
+                        <>
+                          <Avatar
+                            src={
+                              currentConversation.participant.avatarUrl ||
+                              undefined
+                            }
+                            sx={{ width: 20, height: 20 }}
+                          >
+                            {message.sender.name.charAt(0).toUpperCase()}
+                          </Avatar>
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            {message.sender.name}
+                          </Typography>
+                        </>
+                      )}
                     </Stack>
                   ) : null}
                   <Typography variant="body2">{message.content}</Typography>

@@ -3,7 +3,10 @@
 import FloatingMessengerConversationList from '@/components/messaging/FloatingMessengerConversationList';
 import FloatingMessengerConversationView from '@/components/messaging/FloatingMessengerConversationView';
 import FloatingMessengerLauncher from '@/components/messaging/FloatingMessengerLauncher';
-import { sortConversations } from '@/components/messaging/floatingMessenger.utils';
+import {
+  sortConversations,
+  sortMessages,
+} from '@/components/messaging/floatingMessenger.utils';
 import {
   listConversationMessages,
   listConversations,
@@ -11,11 +14,13 @@ import {
   sendConversationMessage,
 } from '@/lib/api/messages.api';
 import { useUserSession } from '@/lib/auth/userSession';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { ConversationMessage, ConversationSummary } from '@/type/messages';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import { Box, IconButton, Paper, Stack, Typography } from '@mui/material';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -55,6 +60,16 @@ export default function FloatingMessenger() {
       ),
     [conversations],
   );
+
+  const participantHref = currentConversation
+    ? buildProfileHref({
+        id: currentConversation.participant.id,
+        name: currentConversation.participant.name,
+        handle: currentConversation.participant.handle,
+        email: currentConversation.participant.email,
+        avatarUrl: currentConversation.participant.avatarUrl,
+      })
+    : null;
 
   useEffect(() => {
     if (isHidden) return;
@@ -101,8 +116,9 @@ export default function FloatingMessenger() {
       try {
         setLoadingMessages(true);
         setError('');
-        const nextMessages =
-          await listConversationMessages(activeConversationId);
+        const nextMessages = sortMessages(
+          await listConversationMessages(activeConversationId),
+        );
         if (!active) return;
         setMessages(nextMessages);
         await markConversationRead(activeConversationId);
@@ -176,7 +192,7 @@ export default function FloatingMessenger() {
         throw new Error('Message non retourne par le backend.');
       }
 
-      setMessages((prev) => [...prev, created]);
+      setMessages((prev) => sortMessages([...prev, created]));
       setDraft('');
       setConversations((prev) =>
         sortConversations(
@@ -258,11 +274,25 @@ export default function FloatingMessenger() {
                     <ArrowBackRoundedIcon fontSize="small" />
                   </IconButton>
                 ) : null}
-                <Typography sx={{ fontWeight: 700 }}>
-                  {currentConversation
-                    ? currentConversation.participant.name
-                    : 'Messagerie'}
-                </Typography>
+                {currentConversation && participantHref ? (
+                  <Typography
+                    component={Link}
+                    href={participantHref}
+                    sx={{
+                      fontWeight: 700,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {currentConversation.participant.name}
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {currentConversation
+                      ? currentConversation.participant.name
+                      : 'Messagerie'}
+                  </Typography>
+                )}
               </Stack>
               <Stack direction="row" spacing={0.5}>
                 <IconButton

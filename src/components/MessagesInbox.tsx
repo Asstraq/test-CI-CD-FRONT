@@ -1,5 +1,6 @@
 'use client';
 
+import { sortMessages } from '@/components/messaging/floatingMessenger.utils';
 import {
   listConversationMessages,
   listConversations,
@@ -7,6 +8,7 @@ import {
   sendConversationMessage,
 } from '@/lib/api/messages.api';
 import { useUserSession } from '@/lib/auth/userSession';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { ConversationMessage, ConversationSummary } from '@/type/messages';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import {
@@ -23,6 +25,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -61,6 +64,16 @@ export default function MessagesInbox({
       ) ?? null,
     [activeConversationId, conversations],
   );
+
+  const participantHref = currentConversation
+    ? buildProfileHref({
+        id: currentConversation.participant.id,
+        name: currentConversation.participant.name,
+        handle: currentConversation.participant.handle,
+        email: currentConversation.participant.email,
+        avatarUrl: currentConversation.participant.avatarUrl,
+      })
+    : null;
 
   useEffect(() => {
     let active = true;
@@ -107,8 +120,9 @@ export default function MessagesInbox({
       try {
         setLoadingMessages(true);
         setMessageError('');
-        const nextMessages =
-          await listConversationMessages(activeConversationId);
+        const nextMessages = sortMessages(
+          await listConversationMessages(activeConversationId),
+        );
         if (!active) return;
         setMessages(nextMessages);
         await markConversationRead(activeConversationId);
@@ -154,7 +168,7 @@ export default function MessagesInbox({
         throw new Error('Message non retourne par le backend.');
       }
 
-      setMessages((prev) => [...prev, created]);
+      setMessages((prev) => sortMessages([...prev, created]));
       setDraft('');
       setConversations((prev) =>
         prev.map((conversation) =>
@@ -207,45 +221,86 @@ export default function MessagesInbox({
           </Box>
         ) : conversations.length > 0 ? (
           <List sx={{ py: 0 }}>
-            {conversations.map((conversation) => (
-              <ListItemButton
-                key={conversation.id}
-                selected={conversation.id === activeConversationId}
-                onClick={() => router.push(`/messages/${conversation.id}`)}
-                sx={{ borderRadius: 2, mb: 0.75 }}
-              >
-                <ListItemAvatar>
-                  <Avatar src={conversation.participant.avatarUrl || undefined}>
-                    {conversation.participant.name.charAt(0).toUpperCase()}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={conversation.participant.name}
-                  secondary={
-                    conversation.lastMessage?.content ||
-                    'Aucun message pour le moment.'
-                  }
-                />
-                {conversation.unreadCount > 0 ? (
-                  <Box
-                    sx={{
-                      minWidth: 22,
-                      height: 22,
-                      borderRadius: 999,
-                      bgcolor: '#2563eb',
-                      color: '#fff',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      px: 0.75,
-                    }}
-                  >
-                    {conversation.unreadCount}
-                  </Box>
-                ) : null}
-              </ListItemButton>
-            ))}
+            {conversations.map((conversation) => {
+              const conversationParticipantHref = buildProfileHref({
+                id: conversation.participant.id,
+                name: conversation.participant.name,
+                handle: conversation.participant.handle,
+                email: conversation.participant.email,
+                avatarUrl: conversation.participant.avatarUrl,
+              });
+
+              return (
+                <ListItemButton
+                  key={conversation.id}
+                  selected={conversation.id === activeConversationId}
+                  onClick={() => router.push(`/messages/${conversation.id}`)}
+                  sx={{ borderRadius: 2, mb: 0.75 }}
+                >
+                  <ListItemAvatar>
+                    {conversationParticipantHref ? (
+                      <Avatar
+                        component={Link}
+                        href={conversationParticipantHref}
+                        onClick={(event) => event.stopPropagation()}
+                        src={conversation.participant.avatarUrl || undefined}
+                        sx={{ textDecoration: 'none' }}
+                      >
+                        {conversation.participant.name.charAt(0).toUpperCase()}
+                      </Avatar>
+                    ) : (
+                      <Avatar
+                        src={conversation.participant.avatarUrl || undefined}
+                      >
+                        {conversation.participant.name.charAt(0).toUpperCase()}
+                      </Avatar>
+                    )}
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      conversationParticipantHref ? (
+                        <Typography
+                          component={Link}
+                          href={conversationParticipantHref}
+                          onClick={(event) => event.stopPropagation()}
+                          sx={{
+                            fontWeight: 500,
+                            color: 'inherit',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          {conversation.participant.name}
+                        </Typography>
+                      ) : (
+                        conversation.participant.name
+                      )
+                    }
+                    secondary={
+                      conversation.lastMessage?.content ||
+                      'Aucun message pour le moment.'
+                    }
+                  />
+                  {conversation.unreadCount > 0 ? (
+                    <Box
+                      sx={{
+                        minWidth: 22,
+                        height: 22,
+                        borderRadius: 999,
+                        bgcolor: '#2563eb',
+                        color: '#fff',
+                        display: 'grid',
+                        placeItems: 'center',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        px: 0.75,
+                      }}
+                    >
+                      {conversation.unreadCount}
+                    </Box>
+                  ) : null}
+                </ListItemButton>
+              );
+            })}
           </List>
         ) : (
           <Typography variant="body2" color="text.secondary">
@@ -266,15 +321,40 @@ export default function MessagesInbox({
         {currentConversation ? (
           <Stack spacing={2} sx={{ height: '100%' }}>
             <Stack direction="row" spacing={1.5} alignItems="center">
-              <Avatar
-                src={currentConversation.participant.avatarUrl || undefined}
-              >
-                {currentConversation.participant.name.charAt(0).toUpperCase()}
-              </Avatar>
+              {participantHref ? (
+                <Avatar
+                  component={Link}
+                  href={participantHref}
+                  src={currentConversation.participant.avatarUrl || undefined}
+                  sx={{ textDecoration: 'none' }}
+                >
+                  {currentConversation.participant.name.charAt(0).toUpperCase()}
+                </Avatar>
+              ) : (
+                <Avatar
+                  src={currentConversation.participant.avatarUrl || undefined}
+                >
+                  {currentConversation.participant.name.charAt(0).toUpperCase()}
+                </Avatar>
+              )}
               <Box>
-                <Typography sx={{ fontWeight: 700 }}>
-                  {currentConversation.participant.name}
-                </Typography>
+                {participantHref ? (
+                  <Typography
+                    component={Link}
+                    href={participantHref}
+                    sx={{
+                      fontWeight: 700,
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {currentConversation.participant.name}
+                  </Typography>
+                ) : (
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {currentConversation.participant.name}
+                  </Typography>
+                )}
                 <Typography variant="body2" sx={{ color: '#64748b' }}>
                   {currentConversation.participant.handle}
                 </Typography>
@@ -320,12 +400,62 @@ export default function MessagesInbox({
                         }}
                       >
                         {!isMine ? (
-                          <Typography
-                            variant="caption"
-                            sx={{ display: 'block', fontWeight: 700, mb: 0.25 }}
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            sx={{ mb: 0.5 }}
                           >
-                            {message.sender.name}
-                          </Typography>
+                            {participantHref ? (
+                              <>
+                                <Avatar
+                                  component={Link}
+                                  href={participantHref}
+                                  src={
+                                    currentConversation.participant.avatarUrl ||
+                                    undefined
+                                  }
+                                  sx={{
+                                    width: 20,
+                                    height: 20,
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  {message.sender.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                                <Typography
+                                  component={Link}
+                                  href={participantHref}
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: 'inherit',
+                                    textDecoration: 'none',
+                                  }}
+                                >
+                                  {message.sender.name}
+                                </Typography>
+                              </>
+                            ) : (
+                              <>
+                                <Avatar
+                                  src={
+                                    currentConversation.participant.avatarUrl ||
+                                    undefined
+                                  }
+                                  sx={{ width: 20, height: 20 }}
+                                >
+                                  {message.sender.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontWeight: 700 }}
+                                >
+                                  {message.sender.name}
+                                </Typography>
+                              </>
+                            )}
+                          </Stack>
                         ) : null}
                         <Typography variant="body2">
                           {message.content}
