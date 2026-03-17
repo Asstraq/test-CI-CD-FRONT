@@ -1,8 +1,11 @@
 'use client';
 
 import * as PlaylistAPI from '@/lib/api/playlist.api';
+import { openConversation } from '@/lib/api/messages.api';
 import { useUserSession } from '@/lib/auth/userSession';
 import {
+  getMyFollowers,
+  getMyFollowing,
   getUserFollowers,
   getUserFollowing,
   type SocialProfile,
@@ -12,6 +15,7 @@ import type { Playlist } from '@/type/playlist';
 import {
   Avatar,
   Box,
+  Button,
   CircularProgress,
   Container,
   Divider,
@@ -49,6 +53,9 @@ export default function PublicProfilePage() {
     null,
   );
   const [socialLoading, setSocialLoading] = useState(true);
+  const [mutualLoading, setMutualLoading] = useState(false);
+  const [canMessage, setCanMessage] = useState(false);
+  const [openingConversation, setOpeningConversation] = useState(false);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,6 +97,44 @@ export default function PublicProfilePage() {
     }
 
     void loadSocialProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.user.id, userId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMutualStatus() {
+      if (!currentUser?.user.id || !userId) return;
+      if (String(currentUser.user.id) === String(userId)) return;
+
+      try {
+        setMutualLoading(true);
+        const [myFollowing, myFollowers] = await Promise.all([
+          getMyFollowing(),
+          getMyFollowers(),
+        ]);
+        if (!active) return;
+
+        const followsUser = myFollowing.some(
+          (profile) => String(profile.id) === String(userId),
+        );
+        const followedByUser = myFollowers.some(
+          (profile) => String(profile.id) === String(userId),
+        );
+
+        setCanMessage(followsUser && followedByUser);
+      } catch {
+        if (!active) return;
+        setCanMessage(false);
+      } finally {
+        if (active) setMutualLoading(false);
+      }
+    }
+
+    void loadMutualStatus();
 
     return () => {
       active = false;
@@ -272,6 +317,40 @@ export default function PublicProfilePage() {
                   <Typography sx={{ color: '#64748b', mt: 0.5 }}>
                     {profile.email}
                   </Typography>
+                ) : null}
+                {currentUser?.user.id ? (
+                  <Box sx={{ mt: 2 }}>
+                    <Button
+                      variant="contained"
+                      disabled={
+                        mutualLoading || openingConversation || !canMessage
+                      }
+                      onClick={async () => {
+                        if (!userId || !canMessage) return;
+                        try {
+                          setOpeningConversation(true);
+                          const conversation = await openConversation(userId);
+                          router.push(`/messages/${conversation.id}`);
+                        } finally {
+                          setOpeningConversation(false);
+                        }
+                      }}
+                    >
+                      {openingConversation
+                        ? 'Ouverture...'
+                        : canMessage
+                          ? 'Envoyer un message'
+                          : 'Messagerie indisponible'}
+                    </Button>
+                    {!mutualLoading && !canMessage ? (
+                      <Typography
+                        variant="body2"
+                        sx={{ color: '#64748b', mt: 1 }}
+                      >
+                        La messagerie privee est reservee aux suivis mutuels.
+                      </Typography>
+                    ) : null}
+                  </Box>
                 ) : null}
               </Box>
             </Stack>
