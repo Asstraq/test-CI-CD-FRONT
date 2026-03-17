@@ -1,11 +1,10 @@
 'use client';
 
+import ProfileIdentityLink from '@/components/ProfileIdentityLink';
 import { getMessageTimeLabel } from '@/components/messaging/floatingMessenger.utils';
-import { buildProfileHref } from '@/lib/profile/profileHref';
-import type { ConversationMessage, ConversationSummary } from '@/type/messages';
+import type { ConversationMessage } from '@/type/messages';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import {
-  Avatar,
   Box,
   CircularProgress,
   Divider,
@@ -15,10 +14,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import Link from 'next/link';
 
 type FloatingMessengerConversationViewProps = {
-  currentConversation: ConversationSummary;
   currentUserId: string | null;
   messages: ConversationMessage[];
   loading: boolean;
@@ -29,7 +26,6 @@ type FloatingMessengerConversationViewProps = {
 };
 
 export default function FloatingMessengerConversationView({
-  currentConversation,
   currentUserId,
   messages,
   loading,
@@ -38,14 +34,6 @@ export default function FloatingMessengerConversationView({
   onDraftChange,
   onSendMessage,
 }: FloatingMessengerConversationViewProps) {
-  const participantHref = buildProfileHref({
-    id: currentConversation.participant.id,
-    name: currentConversation.participant.name,
-    handle: currentConversation.participant.handle,
-    email: currentConversation.participant.email,
-    avatarUrl: currentConversation.participant.avatarUrl,
-  });
-
   return (
     <>
       <Divider />
@@ -85,62 +73,13 @@ export default function FloatingMessengerConversationView({
                   }}
                 >
                   {!isMine ? (
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      alignItems="center"
+                    <ProfileIdentityLink
+                      profile={message.sender}
+                      avatarSize={20}
+                      nameVariant="caption"
                       sx={{ mb: 0.5 }}
-                    >
-                      {participantHref ? (
-                        <>
-                          <Avatar
-                            component={Link}
-                            href={participantHref}
-                            src={
-                              currentConversation.participant.avatarUrl ||
-                              undefined
-                            }
-                            sx={{
-                              width: 20,
-                              height: 20,
-                              textDecoration: 'none',
-                            }}
-                          >
-                            {message.sender.name.charAt(0).toUpperCase()}
-                          </Avatar>
-                          <Typography
-                            component={Link}
-                            href={participantHref}
-                            variant="caption"
-                            sx={{
-                              fontWeight: 700,
-                              color: 'inherit',
-                              textDecoration: 'none',
-                            }}
-                          >
-                            {message.sender.name}
-                          </Typography>
-                        </>
-                      ) : (
-                        <>
-                          <Avatar
-                            src={
-                              currentConversation.participant.avatarUrl ||
-                              undefined
-                            }
-                            sx={{ width: 20, height: 20 }}
-                          >
-                            {message.sender.name.charAt(0).toUpperCase()}
-                          </Avatar>
-                          <Typography
-                            variant="caption"
-                            sx={{ fontWeight: 700 }}
-                          >
-                            {message.sender.name}
-                          </Typography>
-                        </>
-                      )}
-                    </Stack>
+                      nameSx={{ fontWeight: 700 }}
+                    />
                   ) : null}
                   <Typography variant="body2">{message.content}</Typography>
                   <Typography

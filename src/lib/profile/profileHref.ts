@@ -1,4 +1,4 @@
-type ProfileLinkInput = {
+export type ProfileLinkInput = {
   id?: string | number | null;
   name?: string | null;
   handle?: string | null;

@@ -1,5 +1,6 @@
 'use client';
 
+import ProfileIdentityLink from '@/components/ProfileIdentityLink';
 import FloatingMessengerConversationList from '@/components/messaging/FloatingMessengerConversationList';
 import FloatingMessengerConversationView from '@/components/messaging/FloatingMessengerConversationView';
 import FloatingMessengerLauncher from '@/components/messaging/FloatingMessengerLauncher';
@@ -14,13 +15,11 @@ import {
   sendConversationMessage,
 } from '@/lib/api/messages.api';
 import { useUserSession } from '@/lib/auth/userSession';
-import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { ConversationMessage, ConversationSummary } from '@/type/messages';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import { Box, IconButton, Paper, Stack, Typography } from '@mui/material';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -60,16 +59,6 @@ export default function FloatingMessenger() {
       ),
     [conversations],
   );
-
-  const participantHref = currentConversation
-    ? buildProfileHref({
-        id: currentConversation.participant.id,
-        name: currentConversation.participant.name,
-        handle: currentConversation.participant.handle,
-        email: currentConversation.participant.email,
-        avatarUrl: currentConversation.participant.avatarUrl,
-      })
-    : null;
 
   useEffect(() => {
     if (isHidden) return;
@@ -274,24 +263,14 @@ export default function FloatingMessenger() {
                     <ArrowBackRoundedIcon fontSize="small" />
                   </IconButton>
                 ) : null}
-                {currentConversation && participantHref ? (
-                  <Typography
-                    component={Link}
-                    href={participantHref}
-                    sx={{
-                      fontWeight: 700,
-                      color: 'inherit',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    {currentConversation.participant.name}
-                  </Typography>
+                {currentConversation ? (
+                  <ProfileIdentityLink
+                    profile={currentConversation.participant}
+                    showAvatar={false}
+                    nameSx={{ fontWeight: 700, color: 'inherit' }}
+                  />
                 ) : (
-                  <Typography sx={{ fontWeight: 700 }}>
-                    {currentConversation
-                      ? currentConversation.participant.name
-                      : 'Messagerie'}
-                  </Typography>
+                  <Typography sx={{ fontWeight: 700 }}>Messagerie</Typography>
                 )}
               </Stack>
               <Stack direction="row" spacing={0.5}>
@@ -340,7 +319,6 @@ export default function FloatingMessenger() {
             ) : (
               currentConversation && (
                 <FloatingMessengerConversationView
-                  currentConversation={currentConversation}
                   currentUserId={currentUserId}
                   messages={messages}
                   loading={loadingMessages}
