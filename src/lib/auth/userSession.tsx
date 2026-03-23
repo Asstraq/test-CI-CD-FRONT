@@ -1,20 +1,13 @@
 'use client';
 
-import { Role } from '@/enum/roles';
+import type { User } from '@/type/user';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState } from 'react';
 
 const STORAGE_KEY = 'user';
 
 export type SessionUser = {
-  user: {
-    id?: string;
-    email: string;
-    role: Role;
-    nom?: string;
-    avatarUrl?: URL;
-    bio?: string;
-  };
+  user: User;
 };
 
 type UserSessionContextValue = {
