@@ -1,5 +1,5 @@
 import { api } from '@/lib/api/http';
-import { ResponseAPIUser } from '@/type/user';
+import { ResponseAPIUser, UpdateProfilePayload, User } from '@/type/user';
 
 export function login(email: string, password: string) {
   return api<ResponseAPIUser>('/auth/login', {
@@ -22,7 +22,12 @@ export function logout() {
 }
 
 export function me() {
-  return api<{ user: ResponseAPIUser['user'] } | ResponseAPIUser['user']>(
-    '/auth/me',
-  );
+  return api<{ user: User } | User>('/auth/me');
+}
+
+export function updateProfile(payload: UpdateProfilePayload) {
+  return api<{ user: User } | User>('/auth/profile', {
+    method: 'PATCH',
+    body: payload,
+  });
 }

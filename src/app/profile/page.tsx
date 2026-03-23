@@ -1,5 +1,6 @@
 'use client';
 
+import * as AuthAPI from '@/lib/api/auth.api';
 import * as PlaylistAPI from '@/lib/api/playlist.api';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import {
@@ -11,6 +12,7 @@ import {
 import { useFavorites } from '@/hooks/useFavorites';
 import { useUserSession } from '@/lib/auth/userSession';
 import type { Playlist, PlaylistVisibility } from '@/type/playlist';
+import type { UpdateProfilePayload, User } from '@/type/user';
 import {
   Alert,
   Avatar,
@@ -24,17 +26,21 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   List,
   ListItem,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
+  MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
+import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 function getFollowerStorageKey(userId: string) {
@@ -60,8 +66,46 @@ function writeKnownFollowers(userId: string, followerIds: string[]) {
   );
 }
 
+type ProfileFormState = {
+  nom: string;
+  prenom: string;
+  pseudo: string;
+  email: string;
+  avatarUrl: string;
+  bio: string;
+  isProfilePublic: boolean;
+  displayColor: string;
+  theme: string;
+};
+
+function buildProfileFormState(user?: User | null): ProfileFormState {
+  return {
+    nom: user?.nom ?? '',
+    prenom: user?.prenom ?? '',
+    pseudo: user?.pseudo ?? '',
+    email: user?.email ?? '',
+    avatarUrl: user?.avatarUrl ?? '',
+    bio: user?.bio ?? '',
+    isProfilePublic: user?.isProfilePublic ?? true,
+    displayColor: user?.displayColor ?? '',
+    theme: user?.theme ?? 'LIGHT',
+  };
+}
+
+function getProfileDisplayName(user?: User | null) {
+  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
+    .filter(Boolean)
+    .join(' ');
+
+  if (fullName) return fullName;
+  if (user?.pseudo?.trim()) return user.pseudo.trim();
+  if (user?.name?.trim()) return user.name.trim();
+  if (user?.email?.trim()) return user.email.trim();
+  return 'Mon profil';
+}
+
 export default function ProfilePage() {
-  const { user: userObject } = useUserSession();
+  const { user: userObject, setUser } = useUserSession();
   const user = userObject?.user;
   const {
     favoritesPlaylist,
@@ -89,10 +133,19 @@ export default function ProfilePage() {
   const [socialActionId, setSocialActionId] = useState<string | null>(null);
   const [newFollowers, setNewFollowers] = useState<SocialProfile[]>([]);
   const [newFollowersOpen, setNewFollowersOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState<ProfileFormState>(() =>
+    buildProfileFormState(user),
+  );
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
 
   const favoritesId = favoritesPlaylist?.id ?? null;
   const isFavoritesSelected =
     selectedId !== null && favoritesId !== null && selectedId === favoritesId;
+  const profileDisplayName = useMemo(() => getProfileDisplayName(user), [user]);
+  const profileInitial = profileDisplayName.charAt(0).toUpperCase() || 'U';
 
   const displayedPlaylist = useMemo(() => {
     if (isFavoritesSelected && favoritesPlaylist) return favoritesPlaylist;
@@ -150,6 +203,10 @@ export default function ProfilePage() {
     if (!user) return;
     void loadPlaylists();
   }, [loadPlaylists, user]);
+
+  useEffect(() => {
+    setProfileForm(buildProfileFormState(user));
+  }, [user]);
 
   const loadSocialGraph = useCallback(async () => {
     if (!user?.id) return;
@@ -305,6 +362,83 @@ export default function ProfilePage() {
     );
   };
 
+  const handleProfileFieldChange =
+    (field: keyof Omit<ProfileFormState, 'isProfilePublic'>) =>
+    (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { value } = event.target;
+      setProfileForm((prev) => ({ ...prev, [field]: value }));
+      setProfileError('');
+      setProfileSuccess('');
+    };
+
+  const handleProfileVisibilityChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      isProfilePublic: event.target.checked,
+    }));
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleResetProfileForm = () => {
+    setProfileForm(buildProfileFormState(user));
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleOpenProfileEditor = () => {
+    setProfileForm(buildProfileFormState(user));
+    setProfileError('');
+    setProfileSuccess('');
+    setProfileEditorOpen(true);
+  };
+
+  const handleCloseProfileEditor = () => {
+    if (profileSaving) return;
+    setProfileError('');
+    setProfileEditorOpen(false);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+
+    const payload: UpdateProfilePayload = {
+      nom: profileForm.nom.trim() || undefined,
+      prenom: profileForm.prenom.trim() || undefined,
+      pseudo: profileForm.pseudo.trim() || undefined,
+      email: profileForm.email.trim() || undefined,
+      avatarUrl: profileForm.avatarUrl.trim() || undefined,
+      bio: profileForm.bio.trim() || undefined,
+      isProfilePublic: profileForm.isProfilePublic,
+      displayColor: profileForm.displayColor.trim() || undefined,
+      theme: profileForm.theme.trim() || undefined,
+    };
+
+    try {
+      const response = await AuthAPI.updateProfile(payload);
+      const updatedUser = 'user' in response ? response.user : response;
+
+      setUser({ user: updatedUser });
+      setProfileForm(buildProfileFormState(updatedUser));
+      setProfileEditorOpen(false);
+      setProfileSuccess('Profil mis a jour.');
+    } catch (error) {
+      setProfileError(
+        error instanceof Error
+          ? error.message
+          : 'Impossible de mettre a jour le profil.',
+      );
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   return (
     <Box
       component="main"
@@ -327,27 +461,123 @@ export default function ProfilePage() {
         >
           <Stack spacing={4}>
             <Stack
-              direction={{ xs: 'column', sm: 'row' }}
+              direction={{ xs: 'column', lg: 'row' }}
               spacing={3}
-              alignItems="center"
+              alignItems={{ xs: 'center', lg: 'flex-start' }}
+              justifyContent="space-between"
             >
-              <Avatar
-                alt="Photo de profil"
-                src={'/images/profile-placeholder.jpg'}
-                sx={{ width: 96, height: 96, bgcolor: '#c9d3e3', fontSize: 32 }}
-              />
-              <Box sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
-                <Typography
-                  variant="h4"
-                  sx={{ fontWeight: 600, color: '#1a1d24' }}
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={3}
+                alignItems="center"
+                sx={{ flex: 1 }}
+              >
+                <Avatar
+                  alt={profileDisplayName}
+                  src={user?.avatarUrl || undefined}
+                  sx={{
+                    width: 96,
+                    height: 96,
+                    bgcolor: user?.displayColor || '#c9d3e3',
+                    fontSize: 32,
+                  }}
                 >
-                  {user?.nom}
+                  {profileInitial}
+                </Avatar>
+                <Box sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{ fontWeight: 600, color: '#1a1d24' }}
+                  >
+                    {profileDisplayName}
+                  </Typography>
+                  <Typography sx={{ color: '#4a5568', mt: 1 }}>
+                    {user?.pseudo?.trim()
+                      ? `@${user.pseudo.replace(/^@/, '')}`
+                      : user?.email || 'Ajoutez vos informations de profil.'}
+                  </Typography>
+                  <Typography sx={{ color: '#64748b', mt: 1 }}>
+                    {user?.bio?.trim() ||
+                      'Ajoutez une bio pour completer votre profil.'}
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    justifyContent={{ xs: 'center', sm: 'flex-start' }}
+                    sx={{ mt: 2, flexWrap: 'wrap' }}
+                  >
+                    <Chip
+                      size="small"
+                      label={
+                        user?.isProfilePublic === false
+                          ? 'Profil prive'
+                          : 'Profil public'
+                      }
+                    />
+                    {user?.theme ? (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Theme ${user.theme}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </Box>
+              </Stack>
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  width: { xs: '100%', lg: 240 },
+                  p: 2,
+                  borderRadius: 3,
+                  bgcolor: 'rgba(248, 249, 255, 0.92)',
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: '#1a1d24' }}
+                >
+                  Apercu du profil
                 </Typography>
-                <Typography sx={{ color: '#4a5568', mt: 1 }}>
-                  {user?.bio}
-                </Typography>
-              </Box>
+                <Stack spacing={1} sx={{ mt: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Email
+                  </Typography>
+                  <Typography sx={{ fontWeight: 600, color: '#1a1d24' }}>
+                    {user?.email || 'Non renseigne'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Couleur d&apos;affichage
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: '50%',
+                        border: '1px solid rgba(15, 23, 42, 0.16)',
+                        bgcolor: user?.displayColor || '#cbd5e1',
+                      }}
+                    />
+                    <Typography sx={{ color: '#1a1d24' }}>
+                      {user?.displayColor || 'Defaut'}
+                    </Typography>
+                  </Stack>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenProfileEditor}
+                    sx={{ mt: 1.5, borderRadius: 2 }}
+                  >
+                    Modifier le profil
+                  </Button>
+                </Stack>
+              </Paper>
             </Stack>
+
+            {profileSuccess ? (
+              <Alert severity="success">{profileSuccess}</Alert>
+            ) : null}
 
             <Divider />
 
@@ -803,6 +1033,124 @@ export default function ProfilePage() {
           </Stack>
         </Paper>
       </Container>
+      <Dialog
+        open={profileEditorOpen}
+        onClose={handleCloseProfileEditor}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Modifier mon profil</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
+              Les changements sont envoyes sur `PATCH /auth/profile` puis
+              repercutes dans la session du front.
+            </Typography>
+
+            {profileError ? (
+              <Alert severity="error">{profileError}</Alert>
+            ) : null}
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Nom"
+                value={profileForm.nom}
+                onChange={handleProfileFieldChange('nom')}
+              />
+              <TextField
+                fullWidth
+                label="Prenom"
+                value={profileForm.prenom}
+                onChange={handleProfileFieldChange('prenom')}
+              />
+            </Stack>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Pseudo"
+                value={profileForm.pseudo}
+                onChange={handleProfileFieldChange('pseudo')}
+              />
+              <TextField
+                fullWidth
+                required
+                label="Email"
+                type="email"
+                value={profileForm.email}
+                onChange={handleProfileFieldChange('email')}
+              />
+            </Stack>
+
+            <TextField
+              fullWidth
+              label="Avatar URL"
+              placeholder="https://example.com/avatar.jpg"
+              value={profileForm.avatarUrl}
+              onChange={handleProfileFieldChange('avatarUrl')}
+            />
+
+            <TextField
+              fullWidth
+              multiline
+              minRows={3}
+              label="Bio"
+              value={profileForm.bio}
+              onChange={handleProfileFieldChange('bio')}
+            />
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Couleur d'affichage"
+                placeholder="#FF6600"
+                value={profileForm.displayColor}
+                onChange={handleProfileFieldChange('displayColor')}
+              />
+              <TextField
+                select
+                fullWidth
+                label="Theme"
+                value={profileForm.theme}
+                onChange={handleProfileFieldChange('theme')}
+              >
+                <MenuItem value="LIGHT">LIGHT</MenuItem>
+                <MenuItem value="DARK">DARK</MenuItem>
+              </TextField>
+            </Stack>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={profileForm.isProfilePublic}
+                  onChange={handleProfileVisibilityChange}
+                />
+              }
+              label="Profil public"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            variant="outlined"
+            onClick={handleResetProfileForm}
+            disabled={profileSaving}
+          >
+            Reinitialiser
+          </Button>
+          <Button onClick={handleCloseProfileEditor} disabled={profileSaving}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleSaveProfile()}
+            disabled={profileSaving || !profileForm.email.trim()}
+          >
+            {profileSaving ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
