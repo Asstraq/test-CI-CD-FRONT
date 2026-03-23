@@ -88,6 +88,15 @@ const THEME_COLOR_PRESETS = [
   '#eab308',
 ];
 
+const dialogPaperSx = {
+  maxHeight: 'calc(100dvh - 48px)',
+  overscrollBehavior: 'contain',
+};
+
+const dialogContentSx = {
+  overscrollBehavior: 'contain',
+};
+
 function buildProfileFormState(user?: User | null): ProfileFormState {
   return {
     nom: user?.nom ?? '',
@@ -1132,11 +1141,13 @@ export default function ProfilePage() {
       <Dialog
         open={profileEditorOpen}
         onClose={handleCloseProfileEditor}
+        scroll="paper"
         fullWidth
         maxWidth="md"
+        slotProps={{ paper: { sx: dialogPaperSx } }}
       >
         <DialogTitle>Modifier mon profil</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={dialogContentSx}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" sx={{ color: '#64748b' }}>
               Les changements sont envoyes sur `PATCH /auth/profile` puis
@@ -1318,11 +1329,13 @@ export default function ProfilePage() {
       <Dialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        scroll="paper"
         fullWidth
         maxWidth="sm"
+        slotProps={{ paper: { sx: dialogPaperSx } }}
       >
         <DialogTitle>Créer une playlist</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={dialogContentSx}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               autoFocus
@@ -1361,11 +1374,13 @@ export default function ProfilePage() {
       <Dialog
         open={newFollowersOpen}
         onClose={() => setNewFollowersOpen(false)}
+        scroll="paper"
         fullWidth
         maxWidth="sm"
+        slotProps={{ paper: { sx: dialogPaperSx } }}
       >
         <DialogTitle>Nouveaux abonnes</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={dialogContentSx}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" sx={{ color: '#64748b' }}>
               Des personnes se sont abonnees a vous depuis votre derniere

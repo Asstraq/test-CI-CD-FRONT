@@ -213,7 +213,7 @@ export default function FloatingMessenger() {
         position: 'fixed',
         right: { xs: 12, sm: 20 },
         bottom: { xs: 12, sm: 20 },
-        zIndex: 1400,
+        zIndex: (theme) => theme.zIndex.modal - 1,
       }}
     >
       {!open ? (
