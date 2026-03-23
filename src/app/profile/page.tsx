@@ -77,6 +77,17 @@ type ProfileFormState = {
   theme: string;
 };
 
+const THEME_COLOR_PRESETS = [
+  '#f97316',
+  '#ef4444',
+  '#ec4899',
+  '#8b5cf6',
+  '#3b82f6',
+  '#14b8a6',
+  '#22c55e',
+  '#eab308',
+];
+
 function buildProfileFormState(user?: User | null): ProfileFormState {
   return {
     nom: user?.nom ?? '',
@@ -156,6 +167,8 @@ export default function ProfilePage() {
   const canRemoveAvatar = Boolean(
     selectedAvatarFile || (!avatarRemoved && user?.avatarUrl),
   );
+  const editorAccentColor =
+    profileForm.displayColor || user?.displayColor || '#f97316';
 
   const displayedPlaylist = useMemo(() => {
     if (isFavoritesSelected && favoritesPlaylist) return favoritesPlaylist;
@@ -460,6 +473,12 @@ export default function ProfilePage() {
   const handleRemoveAvatar = () => {
     setSelectedAvatarFile(null);
     setAvatarRemoved(true);
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleSelectThemeColor = (color: string) => {
+    setProfileForm((prev) => ({ ...prev, displayColor: color }));
     setProfileError('');
     setProfileSuccess('');
   };
@@ -1141,7 +1160,7 @@ export default function ProfilePage() {
                 sx={{
                   width: 112,
                   height: 112,
-                  bgcolor: user?.displayColor || '#c9d3e3',
+                  bgcolor: editorAccentColor,
                   fontSize: 36,
                 }}
               >
@@ -1209,24 +1228,60 @@ export default function ProfilePage() {
               onChange={handleProfileFieldChange('bio')}
             />
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                label="Couleur d'affichage"
-                placeholder="#FF6600"
-                value={profileForm.displayColor}
-                onChange={handleProfileFieldChange('displayColor')}
-              />
-              <TextField
-                select
-                fullWidth
-                label="Theme"
-                value={profileForm.theme}
-                onChange={handleProfileFieldChange('theme')}
-              >
-                <MenuItem value="LIGHT">LIGHT</MenuItem>
-                <MenuItem value="DARK">DARK</MenuItem>
-              </TextField>
+            <Stack spacing={1.5}>
+              <Typography sx={{ fontWeight: 600, color: '#1a1d24' }}>
+                Couleur du theme
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {THEME_COLOR_PRESETS.map((color) => (
+                  <Box
+                    key={color}
+                    component="button"
+                    type="button"
+                    onClick={() => handleSelectThemeColor(color)}
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: '50%',
+                      border:
+                        profileForm.displayColor === color
+                          ? '3px solid #111827'
+                          : '2px solid rgba(15, 23, 42, 0.12)',
+                      backgroundColor: color,
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </Stack>
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                <TextField
+                  fullWidth
+                  type="color"
+                  label="Palette"
+                  value={editorAccentColor}
+                  onChange={handleProfileFieldChange('displayColor')}
+                  sx={{ maxWidth: { md: 180 } }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+                <TextField
+                  fullWidth
+                  label="Code hex"
+                  placeholder="#FF6600"
+                  value={profileForm.displayColor}
+                  onChange={handleProfileFieldChange('displayColor')}
+                />
+                <TextField
+                  select
+                  fullWidth
+                  label="Mode"
+                  value={profileForm.theme}
+                  onChange={handleProfileFieldChange('theme')}
+                >
+                  <MenuItem value="LIGHT">Clair</MenuItem>
+                  <MenuItem value="DARK">Sombre</MenuItem>
+                </TextField>
+              </Stack>
             </Stack>
 
             <FormControlLabel
