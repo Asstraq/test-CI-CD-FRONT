@@ -31,3 +31,27 @@ export function updateProfile(payload: UpdateProfilePayload) {
     body: payload,
   });
 }
+
+export async function uploadProfileAvatar(file: File) {
+  const formData = new FormData();
+  formData.set('file', file);
+
+  const response = await fetch('/api/upload/profile-avatar', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const data = (await response.json()) as {
+        message?: string;
+        error?: string;
+      };
+      message = data.message || data.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  return (await response.json()) as { url: string };
+}

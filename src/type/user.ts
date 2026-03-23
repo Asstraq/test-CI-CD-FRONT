@@ -25,7 +25,7 @@ export type UpdateProfilePayload = {
   prenom?: string;
   pseudo?: string;
   email?: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   bio?: string;
   isProfilePublic?: boolean;
   displayColor?: string;

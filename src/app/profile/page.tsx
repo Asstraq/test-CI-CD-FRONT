@@ -41,7 +41,7 @@ import {
 } from '@mui/material';
 import Link from 'next/link';
 import type { ChangeEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 function getFollowerStorageKey(userId: string) {
   return `profile_known_followers_${userId}`;
@@ -71,7 +71,6 @@ type ProfileFormState = {
   prenom: string;
   pseudo: string;
   email: string;
-  avatarUrl: string;
   bio: string;
   isProfilePublic: boolean;
   displayColor: string;
@@ -84,7 +83,6 @@ function buildProfileFormState(user?: User | null): ProfileFormState {
     prenom: user?.prenom ?? '',
     pseudo: user?.pseudo ?? '',
     email: user?.email ?? '',
-    avatarUrl: user?.avatarUrl ?? '',
     bio: user?.bio ?? '',
     isProfilePublic: user?.isProfilePublic ?? true,
     displayColor: user?.displayColor ?? '',
@@ -107,6 +105,7 @@ function getProfileDisplayName(user?: User | null) {
 export default function ProfilePage() {
   const { user: userObject, setUser } = useUserSession();
   const user = userObject?.user;
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const {
     favoritesPlaylist,
     loading: favoritesLoading,
@@ -137,6 +136,11 @@ export default function ProfilePage() {
     buildProfileFormState(user),
   );
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
+    null,
+  );
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarRemoved, setAvatarRemoved] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
@@ -146,6 +150,12 @@ export default function ProfilePage() {
     selectedId !== null && favoritesId !== null && selectedId === favoritesId;
   const profileDisplayName = useMemo(() => getProfileDisplayName(user), [user]);
   const profileInitial = profileDisplayName.charAt(0).toUpperCase() || 'U';
+  const editorAvatarSrc = avatarRemoved
+    ? null
+    : (avatarPreviewUrl ?? user?.avatarUrl ?? null);
+  const canRemoveAvatar = Boolean(
+    selectedAvatarFile || (!avatarRemoved && user?.avatarUrl),
+  );
 
   const displayedPlaylist = useMemo(() => {
     if (isFavoritesSelected && favoritesPlaylist) return favoritesPlaylist;
@@ -207,6 +217,20 @@ export default function ProfilePage() {
   useEffect(() => {
     setProfileForm(buildProfileFormState(user));
   }, [user]);
+
+  useEffect(() => {
+    if (!selectedAvatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(selectedAvatarFile);
+    setAvatarPreviewUrl(nextPreviewUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [selectedAvatarFile]);
 
   const loadSocialGraph = useCallback(async () => {
     if (!user?.id) return;
@@ -384,12 +408,16 @@ export default function ProfilePage() {
 
   const handleResetProfileForm = () => {
     setProfileForm(buildProfileFormState(user));
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
     setProfileError('');
     setProfileSuccess('');
   };
 
   const handleOpenProfileEditor = () => {
     setProfileForm(buildProfileFormState(user));
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
     setProfileError('');
     setProfileSuccess('');
     setProfileEditorOpen(true);
@@ -397,8 +425,43 @@ export default function ProfilePage() {
 
   const handleCloseProfileEditor = () => {
     if (profileSaving) return;
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
     setProfileError('');
     setProfileEditorOpen(false);
+  };
+
+  const handleSelectAvatarClick = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Le fichier selectionne doit etre une image.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError('Image trop volumineuse. Taille maximale: 5 Mo.');
+      return;
+    }
+
+    setSelectedAvatarFile(file);
+    setAvatarRemoved(false);
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleRemoveAvatar = () => {
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(true);
+    setProfileError('');
+    setProfileSuccess('');
   };
 
   const handleSaveProfile = async () => {
@@ -408,24 +471,38 @@ export default function ProfilePage() {
     setProfileError('');
     setProfileSuccess('');
 
-    const payload: UpdateProfilePayload = {
-      nom: profileForm.nom.trim() || undefined,
-      prenom: profileForm.prenom.trim() || undefined,
-      pseudo: profileForm.pseudo.trim() || undefined,
-      email: profileForm.email.trim() || undefined,
-      avatarUrl: profileForm.avatarUrl.trim() || undefined,
-      bio: profileForm.bio.trim() || undefined,
-      isProfilePublic: profileForm.isProfilePublic,
-      displayColor: profileForm.displayColor.trim() || undefined,
-      theme: profileForm.theme.trim() || undefined,
-    };
+    let nextAvatarUrl: string | null | undefined;
 
     try {
+      if (selectedAvatarFile) {
+        const upload = await AuthAPI.uploadProfileAvatar(selectedAvatarFile);
+        nextAvatarUrl = upload.url;
+      } else if (avatarRemoved) {
+        nextAvatarUrl = null;
+      }
+
+      const payload: UpdateProfilePayload = {
+        nom: profileForm.nom.trim() || undefined,
+        prenom: profileForm.prenom.trim() || undefined,
+        pseudo: profileForm.pseudo.trim() || undefined,
+        email: profileForm.email.trim() || undefined,
+        bio: profileForm.bio.trim() || undefined,
+        isProfilePublic: profileForm.isProfilePublic,
+        displayColor: profileForm.displayColor.trim() || undefined,
+        theme: profileForm.theme.trim() || undefined,
+      };
+
+      if (nextAvatarUrl !== undefined) {
+        payload.avatarUrl = nextAvatarUrl;
+      }
+
       const response = await AuthAPI.updateProfile(payload);
       const updatedUser = 'user' in response ? response.user : response;
 
       setUser({ user: updatedUser });
       setProfileForm(buildProfileFormState(updatedUser));
+      setSelectedAvatarFile(null);
+      setAvatarRemoved(false);
       setProfileEditorOpen(false);
       setProfileSuccess('Profil mis a jour.');
     } catch (error) {
@@ -1051,6 +1128,46 @@ export default function ProfilePage() {
               <Alert severity="error">{profileError}</Alert>
             ) : null}
 
+            <Stack spacing={1.5} alignItems="center">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }}
+                onChange={handleAvatarFileChange}
+              />
+              <Avatar
+                src={editorAvatarSrc || undefined}
+                sx={{
+                  width: 112,
+                  height: 112,
+                  bgcolor: user?.displayColor || '#c9d3e3',
+                  fontSize: 36,
+                }}
+              >
+                {profileInitial}
+              </Avatar>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  variant="contained"
+                  onClick={handleSelectAvatarClick}
+                  disabled={profileSaving}
+                >
+                  Choisir une photo
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleRemoveAvatar}
+                  disabled={profileSaving || !canRemoveAvatar}
+                >
+                  Supprimer
+                </Button>
+              </Stack>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                JPG, PNG ou WEBP, 5 Mo maximum.
+              </Typography>
+            </Stack>
+
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
                 fullWidth
@@ -1082,14 +1199,6 @@ export default function ProfilePage() {
                 onChange={handleProfileFieldChange('email')}
               />
             </Stack>
-
-            <TextField
-              fullWidth
-              label="Avatar URL"
-              placeholder="https://example.com/avatar.jpg"
-              value={profileForm.avatarUrl}
-              onChange={handleProfileFieldChange('avatarUrl')}
-            />
 
             <TextField
               fullWidth
