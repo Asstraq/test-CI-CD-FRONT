@@ -1,8 +1,9 @@
 'use client';
 
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import type { TrackSharePayload } from '@/lib/messages/track-share';
 import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
-import { Avatar, Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
 
 type SharedTrackMessageCardProps = {
   payload: TrackSharePayload;
@@ -25,11 +26,11 @@ export default function SharedTrackMessageCard({
       }}
     >
       <Stack direction="row" spacing={1.25} alignItems="center">
-        <Avatar
-          variant="rounded"
-          src={payload.imageUrl || undefined}
+        <TrackPreviewArtwork
+          trackId={payload.spotifyId}
+          imageUrl={payload.imageUrl}
           alt={payload.title}
-          sx={{ width: 56, height: 56 }}
+          size={56}
         />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Chip
@@ -56,17 +57,6 @@ export default function SharedTrackMessageCard({
           </Typography>
         </Box>
       </Stack>
-
-      {payload.previewUrl ? (
-        <Box sx={{ mt: 1 }}>
-          <audio
-            controls
-            preload="none"
-            src={payload.previewUrl}
-            style={{ width: '100%', maxWidth: '100%' }}
-          />
-        </Box>
-      ) : null}
     </Paper>
   );
 }

@@ -9,6 +9,7 @@ import {
 import { getToken } from '@/lib/auth/token';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { FeedComment, FeedShare, FeedUser } from '@/type/feed';
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import AlbumRoundedIcon from '@mui/icons-material/AlbumRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded';
@@ -403,12 +404,21 @@ export default function FeedPost({ share, author }: FeedPostProps) {
               : undefined,
           }}
         >
-          <Avatar
-            variant="rounded"
-            src={sharedMeta.imageUrl || undefined}
-            alt={sharedMeta.title}
-            sx={{ width: 56, height: 56 }}
-          />
+          {share.shared.kind === 'TRACK' ? (
+            <TrackPreviewArtwork
+              trackId={share.shared.spotifyId}
+              imageUrl={sharedMeta.imageUrl}
+              alt={sharedMeta.title}
+              size={56}
+            />
+          ) : (
+            <Avatar
+              variant="rounded"
+              src={sharedMeta.imageUrl || undefined}
+              alt={sharedMeta.title}
+              sx={{ width: 56, height: 56 }}
+            />
+          )}
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <Chip

@@ -3,6 +3,7 @@
 import { BACKEND_URL } from '@/lib/config';
 import { useAuth } from '@/hooks/useAuth';
 import LikeButton from '@/components/LikeButton';
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import {
   openConversation,
   sendConversationMessage,
@@ -313,10 +314,11 @@ export default function SearchInput() {
                   }
                 >
                   <ListItemAvatar>
-                    <Avatar
-                      variant="rounded"
-                      src={track.album?.image ?? undefined}
+                    <TrackPreviewArtwork
+                      trackId={track.id}
+                      imageUrl={track.album?.image ?? null}
                       alt={track.album?.name || track.name}
+                      size={40}
                     />
                   </ListItemAvatar>
                   <ListItemText
@@ -418,10 +420,11 @@ export default function SearchInput() {
                 }}
               >
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                  <Avatar
-                    variant="rounded"
-                    src={share.track.album?.image ?? undefined}
+                  <TrackPreviewArtwork
+                    trackId={share.track.id}
+                    imageUrl={share.track.album?.image ?? null}
                     alt={share.track.album?.name || share.track.name}
+                    size={40}
                   />
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 700 }} noWrap>

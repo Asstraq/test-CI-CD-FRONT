@@ -2,6 +2,7 @@
 
 import * as AuthAPI from '@/lib/api/auth.api';
 import * as PlaylistAPI from '@/lib/api/playlist.api';
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import {
   followUser,
@@ -1086,11 +1087,11 @@ export default function ProfilePage() {
                             }}
                           >
                             <ListItemAvatar>
-                              <Avatar
-                                variant="rounded"
-                                src={track.album?.image ?? undefined}
+                              <TrackPreviewArtwork
+                                trackId={track.spotifyId ?? track.id}
+                                imageUrl={track.album?.image ?? null}
                                 alt={track.album?.name || track.name}
-                                sx={{ width: 48, height: 48 }}
+                                size={48}
                               />
                             </ListItemAvatar>
                             <ListItemText
