@@ -1,6 +1,7 @@
 'use client';
 
 import LikeButton from '@/components/LikeButton';
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import { useAuth } from '@/hooks/useAuth';
 import type { AddTrackToPlaylistRequest } from '@/type/playlist';
 import { Box, Stack, Typography } from '@mui/material';
@@ -48,14 +49,30 @@ export default function AlbumTracks({ tracks, album }: AlbumTracksProps) {
             justifyContent: 'space-between',
             p: 1,
             borderRadius: 2,
+            gap: 1.5,
             '&:hover': {
               backgroundColor: 'rgba(0, 0, 0, 0.02)',
             },
           }}
         >
-          <Typography>
-            {index + 1}. {track.name}
-          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              minWidth: 0,
+            }}
+          >
+            <TrackPreviewArtwork
+              trackId={track.id ?? null}
+              imageUrl={album.image ?? null}
+              alt={track.name}
+              size={44}
+            />
+            <Typography noWrap>
+              {index + 1}. {track.name}
+            </Typography>
+          </Box>
           {user && track.id && (
             <LikeButton track={createTrackData(track)} size="small" />
           )}

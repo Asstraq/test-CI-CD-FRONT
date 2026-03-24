@@ -1,6 +1,8 @@
 'use client';
 
+import * as AuthAPI from '@/lib/api/auth.api';
 import * as PlaylistAPI from '@/lib/api/playlist.api';
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import {
   followUser,
@@ -11,6 +13,7 @@ import {
 import { useFavorites } from '@/hooks/useFavorites';
 import { useUserSession } from '@/lib/auth/userSession';
 import type { Playlist, PlaylistVisibility } from '@/type/playlist';
+import type { UpdateProfilePayload, User } from '@/type/user';
 import {
   Alert,
   Avatar,
@@ -24,18 +27,22 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   List,
   ListItem,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
+  MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 function getFollowerStorageKey(userId: string) {
   return `profile_known_followers_${userId}`;
@@ -60,9 +67,66 @@ function writeKnownFollowers(userId: string, followerIds: string[]) {
   );
 }
 
+type ProfileFormState = {
+  nom: string;
+  prenom: string;
+  pseudo: string;
+  email: string;
+  bio: string;
+  isProfilePublic: boolean;
+  displayColor: string;
+  theme: string;
+};
+
+const THEME_COLOR_PRESETS = [
+  '#f97316',
+  '#ef4444',
+  '#ec4899',
+  '#8b5cf6',
+  '#3b82f6',
+  '#14b8a6',
+  '#22c55e',
+  '#eab308',
+];
+
+const dialogPaperSx = {
+  maxHeight: 'calc(100dvh - 48px)',
+  overscrollBehavior: 'contain',
+};
+
+const dialogContentSx = {
+  overscrollBehavior: 'contain',
+};
+
+function buildProfileFormState(user?: User | null): ProfileFormState {
+  return {
+    nom: user?.nom ?? '',
+    prenom: user?.prenom ?? '',
+    pseudo: user?.pseudo ?? '',
+    email: user?.email ?? '',
+    bio: user?.bio ?? '',
+    isProfilePublic: user?.isProfilePublic ?? true,
+    displayColor: user?.displayColor ?? '',
+    theme: user?.theme ?? 'LIGHT',
+  };
+}
+
+function getProfileDisplayName(user?: User | null) {
+  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
+    .filter(Boolean)
+    .join(' ');
+
+  if (fullName) return fullName;
+  if (user?.pseudo?.trim()) return user.pseudo.trim();
+  if (user?.name?.trim()) return user.name.trim();
+  if (user?.email?.trim()) return user.email.trim();
+  return 'Mon profil';
+}
+
 export default function ProfilePage() {
-  const { user: userObject } = useUserSession();
+  const { user: userObject, setUser } = useUserSession();
   const user = userObject?.user;
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const {
     favoritesPlaylist,
     loading: favoritesLoading,
@@ -89,10 +153,32 @@ export default function ProfilePage() {
   const [socialActionId, setSocialActionId] = useState<string | null>(null);
   const [newFollowers, setNewFollowers] = useState<SocialProfile[]>([]);
   const [newFollowersOpen, setNewFollowersOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState<ProfileFormState>(() =>
+    buildProfileFormState(user),
+  );
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
+    null,
+  );
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarRemoved, setAvatarRemoved] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
 
   const favoritesId = favoritesPlaylist?.id ?? null;
   const isFavoritesSelected =
     selectedId !== null && favoritesId !== null && selectedId === favoritesId;
+  const profileDisplayName = useMemo(() => getProfileDisplayName(user), [user]);
+  const profileInitial = profileDisplayName.charAt(0).toUpperCase() || 'U';
+  const editorAvatarSrc = avatarRemoved
+    ? null
+    : (avatarPreviewUrl ?? user?.avatarUrl ?? null);
+  const canRemoveAvatar = Boolean(
+    selectedAvatarFile || (!avatarRemoved && user?.avatarUrl),
+  );
+  const editorAccentColor =
+    profileForm.displayColor || user?.displayColor || '#f97316';
 
   const displayedPlaylist = useMemo(() => {
     if (isFavoritesSelected && favoritesPlaylist) return favoritesPlaylist;
@@ -150,6 +236,24 @@ export default function ProfilePage() {
     if (!user) return;
     void loadPlaylists();
   }, [loadPlaylists, user]);
+
+  useEffect(() => {
+    setProfileForm(buildProfileFormState(user));
+  }, [user]);
+
+  useEffect(() => {
+    if (!selectedAvatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(selectedAvatarFile);
+    setAvatarPreviewUrl(nextPreviewUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [selectedAvatarFile]);
 
   const loadSocialGraph = useCallback(async () => {
     if (!user?.id) return;
@@ -305,6 +409,142 @@ export default function ProfilePage() {
     );
   };
 
+  const handleProfileFieldChange =
+    (field: keyof Omit<ProfileFormState, 'isProfilePublic'>) =>
+    (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { value } = event.target;
+      setProfileForm((prev) => ({ ...prev, [field]: value }));
+      setProfileError('');
+      setProfileSuccess('');
+    };
+
+  const handleProfileVisibilityChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      isProfilePublic: event.target.checked,
+    }));
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleResetProfileForm = () => {
+    setProfileForm(buildProfileFormState(user));
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleOpenProfileEditor = () => {
+    setProfileForm(buildProfileFormState(user));
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
+    setProfileError('');
+    setProfileSuccess('');
+    setProfileEditorOpen(true);
+  };
+
+  const handleCloseProfileEditor = () => {
+    if (profileSaving) return;
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
+    setProfileError('');
+    setProfileEditorOpen(false);
+  };
+
+  const handleSelectAvatarClick = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Le fichier selectionne doit etre une image.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError('Image trop volumineuse. Taille maximale: 5 Mo.');
+      return;
+    }
+
+    setSelectedAvatarFile(file);
+    setAvatarRemoved(false);
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleRemoveAvatar = () => {
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(true);
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleSelectThemeColor = (color: string) => {
+    setProfileForm((prev) => ({ ...prev, displayColor: color }));
+    setProfileError('');
+    setProfileSuccess('');
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+
+    setProfileSaving(true);
+    setProfileError('');
+    setProfileSuccess('');
+
+    let nextAvatarUrl: string | null | undefined;
+
+    try {
+      if (selectedAvatarFile) {
+        const upload = await AuthAPI.uploadProfileAvatar(selectedAvatarFile);
+        nextAvatarUrl = upload.url;
+      } else if (avatarRemoved) {
+        nextAvatarUrl = null;
+      }
+
+      const payload: UpdateProfilePayload = {
+        nom: profileForm.nom.trim() || undefined,
+        prenom: profileForm.prenom.trim() || undefined,
+        pseudo: profileForm.pseudo.trim() || undefined,
+        email: profileForm.email.trim() || undefined,
+        bio: profileForm.bio.trim() || undefined,
+        isProfilePublic: profileForm.isProfilePublic,
+        displayColor: profileForm.displayColor.trim() || undefined,
+        theme: profileForm.theme.trim() || undefined,
+      };
+
+      if (nextAvatarUrl !== undefined) {
+        payload.avatarUrl = nextAvatarUrl;
+      }
+
+      const response = await AuthAPI.updateProfile(payload);
+      const updatedUser = 'user' in response ? response.user : response;
+
+      setUser({ user: updatedUser });
+      setProfileForm(buildProfileFormState(updatedUser));
+      setSelectedAvatarFile(null);
+      setAvatarRemoved(false);
+      setProfileEditorOpen(false);
+      setProfileSuccess('Profil mis a jour.');
+    } catch (error) {
+      setProfileError(
+        error instanceof Error
+          ? error.message
+          : 'Impossible de mettre a jour le profil.',
+      );
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   return (
     <Box
       component="main"
@@ -327,27 +567,123 @@ export default function ProfilePage() {
         >
           <Stack spacing={4}>
             <Stack
-              direction={{ xs: 'column', sm: 'row' }}
+              direction={{ xs: 'column', lg: 'row' }}
               spacing={3}
-              alignItems="center"
+              alignItems={{ xs: 'center', lg: 'flex-start' }}
+              justifyContent="space-between"
             >
-              <Avatar
-                alt="Photo de profil"
-                src={'/images/profile-placeholder.jpg'}
-                sx={{ width: 96, height: 96, bgcolor: '#c9d3e3', fontSize: 32 }}
-              />
-              <Box sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
-                <Typography
-                  variant="h4"
-                  sx={{ fontWeight: 600, color: '#1a1d24' }}
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={3}
+                alignItems="center"
+                sx={{ flex: 1 }}
+              >
+                <Avatar
+                  alt={profileDisplayName}
+                  src={user?.avatarUrl || undefined}
+                  sx={{
+                    width: 96,
+                    height: 96,
+                    bgcolor: user?.displayColor || '#c9d3e3',
+                    fontSize: 32,
+                  }}
                 >
-                  {user?.nom}
+                  {profileInitial}
+                </Avatar>
+                <Box sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
+                  <Typography
+                    variant="h4"
+                    sx={{ fontWeight: 600, color: '#1a1d24' }}
+                  >
+                    {profileDisplayName}
+                  </Typography>
+                  <Typography sx={{ color: '#4a5568', mt: 1 }}>
+                    {user?.pseudo?.trim()
+                      ? `@${user.pseudo.replace(/^@/, '')}`
+                      : user?.email || 'Ajoutez vos informations de profil.'}
+                  </Typography>
+                  <Typography sx={{ color: '#64748b', mt: 1 }}>
+                    {user?.bio?.trim() ||
+                      'Ajoutez une bio pour completer votre profil.'}
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    justifyContent={{ xs: 'center', sm: 'flex-start' }}
+                    sx={{ mt: 2, flexWrap: 'wrap' }}
+                  >
+                    <Chip
+                      size="small"
+                      label={
+                        user?.isProfilePublic === false
+                          ? 'Profil prive'
+                          : 'Profil public'
+                      }
+                    />
+                    {user?.theme ? (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Theme ${user.theme}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </Box>
+              </Stack>
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  width: { xs: '100%', lg: 240 },
+                  p: 2,
+                  borderRadius: 3,
+                  bgcolor: 'rgba(248, 249, 255, 0.92)',
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: '#1a1d24' }}
+                >
+                  Apercu du profil
                 </Typography>
-                <Typography sx={{ color: '#4a5568', mt: 1 }}>
-                  {user?.bio}
-                </Typography>
-              </Box>
+                <Stack spacing={1} sx={{ mt: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Email
+                  </Typography>
+                  <Typography sx={{ fontWeight: 600, color: '#1a1d24' }}>
+                    {user?.email || 'Non renseigne'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Couleur d&apos;affichage
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: '50%',
+                        border: '1px solid rgba(15, 23, 42, 0.16)',
+                        bgcolor: user?.displayColor || '#cbd5e1',
+                      }}
+                    />
+                    <Typography sx={{ color: '#1a1d24' }}>
+                      {user?.displayColor || 'Defaut'}
+                    </Typography>
+                  </Stack>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenProfileEditor}
+                    sx={{ mt: 1.5, borderRadius: 2 }}
+                  >
+                    Modifier le profil
+                  </Button>
+                </Stack>
+              </Paper>
             </Stack>
+
+            {profileSuccess ? (
+              <Alert severity="success">{profileSuccess}</Alert>
+            ) : null}
 
             <Divider />
 
@@ -751,11 +1087,11 @@ export default function ProfilePage() {
                             }}
                           >
                             <ListItemAvatar>
-                              <Avatar
-                                variant="rounded"
-                                src={track.album?.image ?? undefined}
+                              <TrackPreviewArtwork
+                                trackId={track.spotifyId ?? track.id}
+                                imageUrl={track.album?.image ?? null}
                                 alt={track.album?.name || track.name}
-                                sx={{ width: 48, height: 48 }}
+                                size={48}
                               />
                             </ListItemAvatar>
                             <ListItemText
@@ -804,13 +1140,203 @@ export default function ProfilePage() {
         </Paper>
       </Container>
       <Dialog
+        open={profileEditorOpen}
+        onClose={handleCloseProfileEditor}
+        scroll="paper"
+        fullWidth
+        maxWidth="md"
+        slotProps={{ paper: { sx: dialogPaperSx } }}
+      >
+        <DialogTitle>Modifier mon profil</DialogTitle>
+        <DialogContent sx={dialogContentSx}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
+              Les changements sont envoyes sur `PATCH /auth/profile` puis
+              repercutes dans la session du front.
+            </Typography>
+
+            {profileError ? (
+              <Alert severity="error">{profileError}</Alert>
+            ) : null}
+
+            <Stack spacing={1.5} alignItems="center">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                style={{ display: 'none' }}
+                onChange={handleAvatarFileChange}
+              />
+              <Avatar
+                src={editorAvatarSrc || undefined}
+                sx={{
+                  width: 112,
+                  height: 112,
+                  bgcolor: editorAccentColor,
+                  fontSize: 36,
+                }}
+              >
+                {profileInitial}
+              </Avatar>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  variant="contained"
+                  onClick={handleSelectAvatarClick}
+                  disabled={profileSaving}
+                >
+                  Choisir une photo
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleRemoveAvatar}
+                  disabled={profileSaving || !canRemoveAvatar}
+                >
+                  Supprimer
+                </Button>
+              </Stack>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                JPG, PNG ou WEBP, 5 Mo maximum.
+              </Typography>
+            </Stack>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Nom"
+                value={profileForm.nom}
+                onChange={handleProfileFieldChange('nom')}
+              />
+              <TextField
+                fullWidth
+                label="Prenom"
+                value={profileForm.prenom}
+                onChange={handleProfileFieldChange('prenom')}
+              />
+            </Stack>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Pseudo"
+                value={profileForm.pseudo}
+                onChange={handleProfileFieldChange('pseudo')}
+              />
+              <TextField
+                fullWidth
+                required
+                label="Email"
+                type="email"
+                value={profileForm.email}
+                onChange={handleProfileFieldChange('email')}
+              />
+            </Stack>
+
+            <TextField
+              fullWidth
+              multiline
+              minRows={3}
+              label="Bio"
+              value={profileForm.bio}
+              onChange={handleProfileFieldChange('bio')}
+            />
+
+            <Stack spacing={1.5}>
+              <Typography sx={{ fontWeight: 600, color: '#1a1d24' }}>
+                Couleur du theme
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                {THEME_COLOR_PRESETS.map((color) => (
+                  <Box
+                    key={color}
+                    component="button"
+                    type="button"
+                    onClick={() => handleSelectThemeColor(color)}
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: '50%',
+                      border:
+                        profileForm.displayColor === color
+                          ? '3px solid #111827'
+                          : '2px solid rgba(15, 23, 42, 0.12)',
+                      backgroundColor: color,
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </Stack>
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                <TextField
+                  fullWidth
+                  type="color"
+                  label="Palette"
+                  value={editorAccentColor}
+                  onChange={handleProfileFieldChange('displayColor')}
+                  sx={{ maxWidth: { md: 180 } }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+                <TextField
+                  fullWidth
+                  label="Code hex"
+                  placeholder="#FF6600"
+                  value={profileForm.displayColor}
+                  onChange={handleProfileFieldChange('displayColor')}
+                />
+                <TextField
+                  select
+                  fullWidth
+                  label="Mode"
+                  value={profileForm.theme}
+                  onChange={handleProfileFieldChange('theme')}
+                >
+                  <MenuItem value="LIGHT">Clair</MenuItem>
+                  <MenuItem value="DARK">Sombre</MenuItem>
+                </TextField>
+              </Stack>
+            </Stack>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={profileForm.isProfilePublic}
+                  onChange={handleProfileVisibilityChange}
+                />
+              }
+              label="Profil public"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            variant="outlined"
+            onClick={handleResetProfileForm}
+            disabled={profileSaving}
+          >
+            Reinitialiser
+          </Button>
+          <Button onClick={handleCloseProfileEditor} disabled={profileSaving}>
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleSaveProfile()}
+            disabled={profileSaving || !profileForm.email.trim()}
+          >
+            {profileSaving ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        scroll="paper"
         fullWidth
         maxWidth="sm"
+        slotProps={{ paper: { sx: dialogPaperSx } }}
       >
         <DialogTitle>Créer une playlist</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={dialogContentSx}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               autoFocus
@@ -849,11 +1375,13 @@ export default function ProfilePage() {
       <Dialog
         open={newFollowersOpen}
         onClose={() => setNewFollowersOpen(false)}
+        scroll="paper"
         fullWidth
         maxWidth="sm"
+        slotProps={{ paper: { sx: dialogPaperSx } }}
       >
         <DialogTitle>Nouveaux abonnes</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={dialogContentSx}>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2" sx={{ color: '#64748b' }}>
               Des personnes se sont abonnees a vous depuis votre derniere

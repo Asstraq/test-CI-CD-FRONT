@@ -1,19 +1,26 @@
 'use client';
 
+import ReportContentDialog from '@/components/ReportContentDialog';
+import MessageBody from '@/components/messaging/MessageBody';
 import ProfileIdentityLink from '@/components/ProfileIdentityLink';
 import { getMessageTimeLabel } from '@/components/messaging/floatingMessenger.utils';
 import type { ConversationMessage } from '@/type/messages';
+import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import {
+  Alert,
   Box,
+  Button,
   CircularProgress,
   Divider,
   IconButton,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
+import { useState } from 'react';
 
 type FloatingMessengerConversationViewProps = {
   currentUserId: string | null;
@@ -34,6 +41,11 @@ export default function FloatingMessengerConversationView({
   onDraftChange,
   onSendMessage,
 }: FloatingMessengerConversationViewProps) {
+  const [reportedMessageId, setReportedMessageId] = useState<number | null>(
+    null,
+  );
+  const [reportSuccess, setReportSuccess] = useState('');
+
   return (
     <>
       <Divider />
@@ -81,7 +93,10 @@ export default function FloatingMessengerConversationView({
                       nameSx={{ fontWeight: 700 }}
                     />
                   ) : null}
-                  <Typography variant="body2">{message.content}</Typography>
+                  <MessageBody
+                    content={message.content}
+                    isMine={Boolean(isMine)}
+                  />
                   <Typography
                     variant="caption"
                     sx={{
@@ -93,6 +108,21 @@ export default function FloatingMessengerConversationView({
                   >
                     {getMessageTimeLabel(message.createdAt)}
                   </Typography>
+                  {!isMine ? (
+                    <Button
+                      size="small"
+                      startIcon={<FlagRoundedIcon fontSize="small" />}
+                      onClick={() => setReportedMessageId(Number(message.id))}
+                      sx={{
+                        mt: 0.5,
+                        px: 0,
+                        minWidth: 0,
+                        color: isMine ? '#fff' : '#334155',
+                      }}
+                    >
+                      Signaler
+                    </Button>
+                  ) : null}
                 </Paper>
               </Stack>
             );
@@ -129,6 +159,32 @@ export default function FloatingMessengerConversationView({
           {sending ? <CircularProgress size={18} /> : <SendRoundedIcon />}
         </IconButton>
       </Stack>
+      {reportedMessageId ? (
+        <ReportContentDialog
+          open={Boolean(reportedMessageId)}
+          onClose={() => setReportedMessageId(null)}
+          onReported={setReportSuccess}
+          targetType="MESSAGE"
+          targetId={reportedMessageId}
+          title="Signaler ce message"
+          description="Le message sera transmis à la modération."
+        />
+      ) : null}
+      <Snackbar
+        open={Boolean(reportSuccess)}
+        autoHideDuration={3500}
+        onClose={() => setReportSuccess('')}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setReportSuccess('')}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {reportSuccess}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
