@@ -1,6 +1,7 @@
 'use client';
 
 import * as PlaylistAPI from '@/lib/api/playlist.api';
+import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import { openConversation } from '@/lib/api/messages.api';
 import { useUserSession } from '@/lib/auth/userSession';
 import {
@@ -618,11 +619,11 @@ export default function PublicProfilePage() {
                                 }}
                               >
                                 <ListItemAvatar>
-                                  <Avatar
-                                    variant="rounded"
-                                    src={track.album?.image ?? undefined}
+                                  <TrackPreviewArtwork
+                                    trackId={track.spotifyId ?? track.id}
+                                    imageUrl={track.album?.image ?? null}
                                     alt={track.album?.name || track.name}
-                                    sx={{ width: 48, height: 48 }}
+                                    size={48}
                                   />
                                 </ListItemAvatar>
                                 <ListItemText

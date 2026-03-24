@@ -15,6 +15,15 @@ export type MediaSearchResult = {
   genres?: string[];
 };
 
+export type TrackPreviewResult = {
+  spotifyId: string;
+  title: string;
+  previewUrl: string | null;
+  previewSource: string | null;
+  available: boolean;
+  imageUrl?: string;
+};
+
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' ? (value as UnknownRecord) : null;
 }
@@ -111,6 +120,29 @@ function normalizeTrack(entry: unknown): MediaSearchResult | null {
   };
 }
 
+function normalizeTrackPreview(entry: unknown): TrackPreviewResult | null {
+  const item = asRecord(entry);
+  const spotifyId = readString(item?.spotifyId, item?.id);
+  if (!spotifyId) return null;
+
+  const album = asRecord(item?.album);
+
+  return {
+    spotifyId,
+    title: readString(item?.title, item?.name) ?? 'Titre inconnu',
+    previewUrl: readString(item?.previewUrl) ?? null,
+    previewSource: readString(item?.previewSource) ?? null,
+    available:
+      Boolean(item?.available) && Boolean(readString(item?.previewUrl)),
+    imageUrl: readString(
+      item?.imageUrl,
+      item?.image,
+      album?.image,
+      readImage(album?.images),
+    ),
+  };
+}
+
 function normalizeAlbum(entry: unknown): MediaSearchResult | null {
   const item = asRecord(entry);
   const spotifyId = readString(item?.spotifyId, item?.id);
@@ -185,4 +217,29 @@ export async function searchSpotifyMedia(
   return items
     .map(normalize)
     .filter((entry): entry is MediaSearchResult => Boolean(entry));
+}
+
+export async function getTrackPreviews(
+  spotifyIds: string[],
+): Promise<TrackPreviewResult[]> {
+  const ids = [...new Set(spotifyIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) return [];
+
+  const params = new URLSearchParams({
+    ids: ids.join(','),
+  });
+
+  const response = await api<unknown>(
+    `/spotify/tracks/previews?${params.toString()}`,
+    {
+      auth: false,
+    },
+  );
+
+  const root = asRecord(response);
+  const items = asArray(root?.tracks);
+
+  return items
+    .map(normalizeTrackPreview)
+    .filter((entry): entry is TrackPreviewResult => Boolean(entry));
 }
