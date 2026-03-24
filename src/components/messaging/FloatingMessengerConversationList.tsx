@@ -1,5 +1,6 @@
 'use client';
 
+import { getMessageSnippet } from '@/lib/messages/track-share';
 import type { ConversationSummary } from '@/type/messages';
 import {
   Avatar,
@@ -68,8 +69,9 @@ export default function FloatingMessengerConversationList({
           <ListItemText
             primary={conversation.participant.name}
             secondary={
-              conversation.lastMessage?.content ||
-              'Aucun message pour le moment.'
+              (conversation.lastMessage?.content
+                ? getMessageSnippet(conversation.lastMessage.content)
+                : '') || 'Aucun message pour le moment.'
             }
             primaryTypographyProps={{ fontWeight: 700 }}
           />

@@ -2,8 +2,10 @@
 
 'use client';
 
+import MessageBody from '@/components/messaging/MessageBody';
 import ProfileIdentityLink from '@/components/ProfileIdentityLink';
 import { sortMessages } from '@/components/messaging/floatingMessenger.utils';
+import { getMessageSnippet } from '@/lib/messages/track-share';
 import {
   listConversationMessages,
   listConversations,
@@ -236,8 +238,9 @@ export default function MessagesInbox({
                       />
                     }
                     secondary={
-                      conversation.lastMessage?.content ||
-                      'Aucun message pour le moment.'
+                      (conversation.lastMessage?.content
+                        ? getMessageSnippet(conversation.lastMessage.content)
+                        : '') || 'Aucun message pour le moment.'
                     }
                   />
                   {conversation.unreadCount > 0 ? (
@@ -344,9 +347,10 @@ export default function MessagesInbox({
                             nameSx={{ fontWeight: 700 }}
                           />
                         ) : null}
-                        <Typography variant="body2">
-                          {message.content}
-                        </Typography>
+                        <MessageBody
+                          content={message.content}
+                          isMine={Boolean(isMine)}
+                        />
                         <Typography
                           variant="caption"
                           sx={{
