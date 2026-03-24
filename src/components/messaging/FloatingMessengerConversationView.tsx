@@ -1,5 +1,6 @@
 'use client';
 
+import MessageBody from '@/components/messaging/MessageBody';
 import ProfileIdentityLink from '@/components/ProfileIdentityLink';
 import { getMessageTimeLabel } from '@/components/messaging/floatingMessenger.utils';
 import type { ConversationMessage } from '@/type/messages';
@@ -81,7 +82,10 @@ export default function FloatingMessengerConversationView({
                       nameSx={{ fontWeight: 700 }}
                     />
                   ) : null}
-                  <Typography variant="body2">{message.content}</Typography>
+                  <MessageBody
+                    content={message.content}
+                    isMine={Boolean(isMine)}
+                  />
                   <Typography
                     variant="caption"
                     sx={{
