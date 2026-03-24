@@ -1,5 +1,6 @@
 'use client';
 
+import ReportContentDialog from '@/components/ReportContentDialog';
 import {
   createReviewComment,
   getReviewComments,
@@ -7,6 +8,7 @@ import {
   unlikeReview,
 } from '@/lib/api/feed-interactions.api';
 import { getToken } from '@/lib/auth/token';
+import { useUserSession } from '@/lib/auth/userSession';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { FeedComment, FeedShare, FeedUser } from '@/type/feed';
 import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
@@ -14,6 +16,7 @@ import AlbumRoundedIcon from '@mui/icons-material/AlbumRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded';
 import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
+import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
 import MicExternalOnRoundedIcon from '@mui/icons-material/MicExternalOnRounded';
 import PublicRoundedIcon from '@mui/icons-material/PublicRounded';
@@ -21,6 +24,7 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import SupervisedUserCircleRoundedIcon from '@mui/icons-material/SupervisedUserCircleRounded';
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -29,6 +33,7 @@ import {
   Collapse,
   IconButton,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -96,6 +101,7 @@ function getSharedIcon(kind: FeedShare['shared']['kind']) {
 }
 
 export default function FeedPost({ share, author }: FeedPostProps) {
+  const { user } = useUserSession();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isPublic = share.visibility === 'PUBLIC';
@@ -110,6 +116,12 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   const isAuthenticated = Boolean(getToken());
   const reviewId = share.reviewId;
   const canInteract = isAuthenticated && typeof reviewId === 'number';
+  const currentUserId = user?.user.id ? String(user.user.id) : null;
+  const canReport =
+    isAuthenticated &&
+    typeof reviewId === 'number' &&
+    currentUserId !== null &&
+    String(author.id) !== currentUserId;
 
   const [likes, setLikes] = useState(share.likes);
   const [likedByMe, setLikedByMe] = useState(Boolean(share.likedByMe));
@@ -127,6 +139,8 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   );
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState('');
 
   const commentsCount = Math.max(share.comments, comments.length);
 
@@ -484,6 +498,16 @@ export default function FeedPost({ share, author }: FeedPostProps) {
           >
             {commentsCount}
           </Button>
+          {canReport ? (
+            <Button
+              size="small"
+              startIcon={<FlagRoundedIcon fontSize="small" />}
+              onClick={() => setReportOpen(true)}
+              sx={{ color: '#5f6f92', minWidth: 0, px: 1 }}
+            >
+              Signaler
+            </Button>
+          ) : null}
         </Stack>
 
         <Collapse in={commentsVisible} unmountOnExit>
@@ -544,6 +568,32 @@ export default function FeedPost({ share, author }: FeedPostProps) {
           </Stack>
         </Collapse>
       </Stack>
+      {typeof reviewId === 'number' ? (
+        <ReportContentDialog
+          open={reportOpen}
+          onClose={() => setReportOpen(false)}
+          onReported={setReportSuccess}
+          targetType="REVIEW"
+          targetId={reviewId}
+          title="Signaler cette publication"
+          description="Ce signalement sera transmis à la modération."
+        />
+      ) : null}
+      <Snackbar
+        open={Boolean(reportSuccess)}
+        autoHideDuration={3500}
+        onClose={() => setReportSuccess('')}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setReportSuccess('')}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {reportSuccess}
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 }
