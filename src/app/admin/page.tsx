@@ -220,8 +220,8 @@ function ReportSection({
                         <MenuItem value="REJECTED">REJECTED</MenuItem>
                       </TextField>
 
-                      {report.targetType === 'REVIEW' ||
-                      report.targetType === 'MESSAGE' ? (
+                      {report.target?.kind === 'REVIEW' ||
+                      report.target?.kind === 'MESSAGE' ? (
                         <Button
                           color="error"
                           variant="outlined"

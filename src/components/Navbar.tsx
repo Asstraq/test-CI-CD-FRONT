@@ -1,5 +1,6 @@
 'use client';
 
+import { Role } from '@/enum/roles';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserSession } from '@/lib/auth/userSession';
 import { AppBar, Box, Button, Toolbar, Typography } from '@mui/material';
@@ -41,6 +42,16 @@ export default function Navbar() {
               >
                 Messages
               </Button>
+              {user.user.role === Role.ADMIN ? (
+                <Button
+                  component={Link}
+                  href="/admin"
+                  variant="outlined"
+                  sx={{ textTransform: 'none', borderRadius: 999 }}
+                >
+                  Back office
+                </Button>
+              ) : null}
               <Button
                 component={Link}
                 href="/profile"
