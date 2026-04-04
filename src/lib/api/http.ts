@@ -35,7 +35,7 @@ export async function api<T>(
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return data?.message || `HTTP ${res.status}`;
+    return data?.message || data?.error || `HTTP ${res.status}`;
   } catch {
     return `HTTP ${res.status}`;
   }

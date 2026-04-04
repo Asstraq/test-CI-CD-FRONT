@@ -1,5 +1,6 @@
 'use client';
 
+import ReportContentDialog from '@/components/ReportContentDialog';
 import {
   createReviewComment,
   getReviewComments,
@@ -13,6 +14,7 @@ import AlbumRoundedIcon from '@mui/icons-material/AlbumRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import FavoriteBorderRoundedIcon from '@mui/icons-material/FavoriteBorderRounded';
 import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
+import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
 import MicExternalOnRoundedIcon from '@mui/icons-material/MicExternalOnRounded';
 import PublicRoundedIcon from '@mui/icons-material/PublicRounded';
@@ -20,6 +22,7 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import SupervisedUserCircleRoundedIcon from '@mui/icons-material/SupervisedUserCircleRounded';
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -31,6 +34,7 @@ import {
   DialogTitle,
   IconButton,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -98,6 +102,7 @@ function getSharedIcon(kind: FeedShare['shared']['kind']) {
 }
 
 export default function FeedPost({ share, author }: FeedPostProps) {
+  const { user } = useUserSession();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isPublic = share.visibility === 'PUBLIC';
@@ -125,6 +130,8 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   );
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState('');
 
   const {
     canInteract,
@@ -569,6 +576,16 @@ export default function FeedPost({ share, author }: FeedPostProps) {
           >
             {commentsCount}
           </Button>
+          {canReport ? (
+            <Button
+              size="small"
+              startIcon={<FlagRoundedIcon fontSize="small" />}
+              onClick={() => setReportOpen(true)}
+              sx={{ color: '#5f6f92', minWidth: 0, px: 1 }}
+            >
+              Signaler
+            </Button>
+          ) : null}
         </Stack>
 
         {likesError ? (
