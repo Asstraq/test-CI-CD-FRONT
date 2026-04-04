@@ -8,68 +8,143 @@ import type {
   FeedUser,
 } from '@/type/feed';
 
-type UnknownRecord = Record<string, unknown>;
+type ApiFeedUser = {
+  id?: number | string | null;
+  nom?: string | null;
+  prenom?: string | null;
+  pseudo?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+};
+
+type ApiFeedComment = {
+  id: number | string;
+  content: string;
+  createdAt: string;
+  user?: ApiFeedUser | null;
+  author?: ApiFeedUser | null;
+};
+
+type ApiFeedMedia = {
+  id?: number | null;
+  type?: string | null;
+  spotifyId?: string | null;
+  title?: string | null;
+  name?: string | null;
+  artist?: string | null;
+  imageUrl?: string | null;
+  album?: string | null;
+  albumName?: string | null;
+  year?: number | null;
+  releaseYear?: number | null;
+  genres?: string[] | null;
+};
+
+type ApiFeedReview = {
+  id?: number | null;
+  rating?: number | null;
+  content?: string | null;
+  containsSpoilers?: boolean | null;
+  mediaId?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  visibility?: string | null;
+  likedByMe?: boolean | null;
+  counts?: {
+    comments?: number | null;
+    likes?: number | null;
+  } | null;
+  media?: ApiFeedMedia | null;
+  user?: ApiFeedUser | null;
+  comments?: ApiFeedComment[] | null;
+  comment?: ApiFeedComment | null;
+};
+
+type ApiFeedList = {
+  id?: number | null;
+  name?: string | null;
+  isPublic?: boolean | null;
+};
+
+type ApiFeedActivity = {
+  id: number;
+  type: string;
+  actorId?: number | string | null;
+  targetUserId?: number | string | null;
+  mediaId?: number | null;
+  reviewId?: number | null;
+  listId?: number | null;
+  createdAt: string;
+  actor?: ApiFeedUser | null;
+  targetUser?: ApiFeedUser | null;
+  media?: ApiFeedMedia | null;
+  review?: ApiFeedReview | null;
+  list?: ApiFeedList | null;
+  comments?: ApiFeedComment[] | null;
+  commentList?: ApiFeedComment[] | null;
+  comment?: ApiFeedComment | null;
+};
+
+type FeedResponse = {
+  activities: ApiFeedActivity[];
+};
+
 type NormalizedFeedEntry = FeedEntry & {
   activityType: string;
 };
 
-function asRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' ? (value as UnknownRecord) : null;
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function readString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  return undefined;
-}
-
-function readNumber(...values: unknown[]): number | undefined {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string' && value.trim()) {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) return parsed;
-    }
-  }
-  return undefined;
-}
-
-function readId(...values: unknown[]): string | undefined {
-  const stringValue = readString(...values);
-  if (stringValue) return stringValue;
-
-  const numericValue = readNumber(...values);
-  if (numericValue !== undefined) return String(numericValue);
-
-  return undefined;
-}
-
-function normalizeKind(value: unknown): FeedMediaKind {
-  const raw = readString(value)?.toUpperCase();
+function normalizeKind(value?: string | null): FeedMediaKind {
+  const raw = value?.trim().toUpperCase();
   if (raw === 'ARTIST' || raw === 'ARTISTS') return 'ARTIST';
   if (raw === 'ALBUM' || raw === 'ALBUMS') return 'ALBUM';
   return 'TRACK';
 }
 
 function isLikeActivityType(activityType: string) {
-  return /LIKE/.test(activityType);
+  return activityType.includes('LIKE');
 }
 
 function isCommentActivityType(activityType: string) {
-  return /COMMENT/.test(activityType);
+  return activityType.includes('COMMENT');
 }
 
-function getReviewGroupKey(entry: NormalizedFeedEntry) {
-  if (typeof entry.share.reviewId === 'number') {
-    return `review-${entry.share.reviewId}`;
-  }
+function buildFeedUser(
+  user?: ApiFeedUser | null,
+  fallbackId?: string,
+): FeedUser {
+  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
+    .filter(Boolean)
+    .join(' ');
+  const name =
+    fullName ||
+    user?.nom?.trim() ||
+    user?.prenom?.trim() ||
+    user?.pseudo?.trim() ||
+    user?.email?.trim() ||
+    'Utilisateur';
+  const handleBase = user?.pseudo?.trim() || name;
 
-  return `activity-${entry.share.id}`;
+  return {
+    id:
+      (user?.id !== null && user?.id !== undefined ? String(user.id) : '') ||
+      fallbackId ||
+      'unknown-user',
+    email: user?.email?.trim() || '',
+    name,
+    handle: handleBase.startsWith('@')
+      ? handleBase
+      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
+    avatarUrl: user?.avatarUrl?.trim() || '',
+  };
+}
+
+function buildComment(comment: ApiFeedComment): FeedComment {
+  return {
+    id: String(comment.id),
+    content: comment.content,
+    createdAt: comment.createdAt,
+    author: buildFeedUser(comment.user ?? comment.author),
+  };
 }
 
 function mergeComments(...groups: FeedComment[][]): FeedComment[] {
@@ -89,330 +164,148 @@ function mergeComments(...groups: FeedComment[][]): FeedComment[] {
   );
 }
 
-function normalizeAuthor(
-  item: UnknownRecord,
-  review: UnknownRecord | null,
-): FeedUser {
-  const author =
-    asRecord(item.author) ??
-    asRecord(item.actor) ??
-    asRecord(item.user) ??
-    asRecord(item.owner) ??
-    asRecord(review?.author) ??
-    asRecord(review?.user);
+function getReviewGroupKey(entry: NormalizedFeedEntry) {
+  if (typeof entry.share.reviewId === 'number') {
+    return `review-${entry.share.reviewId}`;
+  }
 
-  const id =
-    readId(author?.id, author?.userId, item.authorId, item.userId) ??
-    'unknown-author';
-  const email = readString(author?.email) ?? '';
-  const name =
-    readString(author?.name, author?.nom, author?.username, author?.handle) ??
-    'Utilisateur';
-  const handleBase =
-    readString(
-      author?.handle,
-      author?.username,
-      author?.slug,
-      author?.nom,
-      author?.name,
-    ) ?? name;
-
-  return {
-    id,
-    email,
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl:
-      readString(
-        author?.avatarUrl,
-        author?.avatar,
-        author?.imageUrl,
-        author?.photoUrl,
-      ) ?? '',
-  };
+  return `activity-${entry.share.id}`;
 }
 
-function normalizeCommentAuthor(item: UnknownRecord | null): FeedUser {
-  const author =
-    asRecord(item?.author) ??
-    asRecord(item?.actor) ??
-    asRecord(item?.user) ??
-    asRecord(item?.owner);
+function collectComments(activity: ApiFeedActivity): FeedComment[] {
+  const entries = [
+    ...(activity.comments ?? []),
+    ...(activity.commentList ?? []),
+    ...(activity.comment ? [activity.comment] : []),
+    ...(activity.review?.comments ?? []),
+    ...(activity.review?.comment ? [activity.review.comment] : []),
+  ];
 
-  const name =
-    readString(
-      author?.name,
-      author?.nom,
-      author?.username,
-      author?.handle,
-      author?.email,
-    ) ?? 'Utilisateur';
-  const handleBase =
-    readString(
-      author?.handle,
-      author?.username,
-      author?.slug,
-      author?.name,
-      author?.nom,
-    ) ?? name;
-
-  return {
-    id: readId(author?.id, author?.userId, author?.email) ?? 'unknown-user',
-    email: readString(author?.email) ?? '',
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl:
-      readString(
-        author?.avatarUrl,
-        author?.avatar,
-        author?.imageUrl,
-        author?.photoUrl,
-      ) ?? '',
-  };
+  return entries.map(buildComment);
 }
 
-function normalizeComments(value: unknown): FeedComment[] {
-  const entries = Array.isArray(value) ? value : asRecord(value) ? [value] : [];
-
-  return entries
-    .map((entry) => {
-      const wrapper = asRecord(entry);
-      const item =
-        asRecord(wrapper?.comment) ??
-        asRecord(wrapper?.data) ??
-        asRecord(wrapper?.item) ??
-        wrapper;
-      if (!item) return null;
-
-      return {
-        id: readId(item.id, item.commentId) ?? `comment-${Date.now()}`,
-        content: readString(item.content, item.text, item.body) ?? '',
-        createdAt:
-          readString(item.createdAt, item.created_at) ??
-          new Date().toISOString(),
-        author: normalizeCommentAuthor(item),
-      };
-    })
-    .filter((comment): comment is FeedComment => Boolean(comment));
-}
-
-function normalizeSharedContent(
-  kind: FeedMediaKind,
-  item: UnknownRecord,
-  review: UnknownRecord | null,
-): FeedSharedContent {
-  const media =
-    asRecord(item.media) ??
-    asRecord(item.spotify) ??
-    asRecord(item.item) ??
-    asRecord(review?.media);
-
-  const spotifyId = readString(
-    item.spotifyId,
-    item.mediaSpotifyId,
-    media?.spotifyId,
-    media?.id,
-    review?.spotifyId,
-  );
-  const imageUrl = readString(
-    media?.imageUrl,
-    media?.image,
-    media?.coverUrl,
-    media?.photoUrl,
-    item.imageUrl,
-  );
+function buildSharedContent(activity: ApiFeedActivity): FeedSharedContent {
+  const media = activity.media ?? activity.review?.media ?? null;
+  const kind = normalizeKind(media?.type);
+  const spotifyId = media?.spotifyId?.trim() || undefined;
+  const imageUrl = media?.imageUrl?.trim() || undefined;
+  const title = media?.title?.trim() || media?.name?.trim();
+  const artist = media?.artist?.trim();
 
   if (kind === 'ARTIST') {
-    const genres =
-      asArray(media?.genres).filter(
-        (value): value is string => typeof value === 'string',
-      ) || [];
-
     return {
-      kind,
+      kind: 'ARTIST',
       spotifyId,
-      name:
-        readString(media?.name, item.title, item.name, review?.title) ??
-        'Artiste inconnu',
-      genres,
+      name: title || 'Artiste inconnu',
+      genres: media?.genres?.filter(Boolean) ?? [],
       imageUrl,
     };
   }
 
   if (kind === 'ALBUM') {
     return {
-      kind,
+      kind: 'ALBUM',
       spotifyId,
-      title:
-        readString(media?.title, media?.name, item.title, review?.title) ??
-        'Album inconnu',
-      artist:
-        readString(
-          media?.artist,
-          media?.artistName,
-          media?.subtitle,
-          item.artist,
-          review?.artist,
-        ) ?? 'Artiste inconnu',
-      year: readNumber(
-        media?.year,
-        media?.releaseYear,
-        item.year,
-        review?.year,
-      ),
+      title: title || 'Album inconnu',
+      artist: artist || 'Artiste inconnu',
+      year: media?.year ?? media?.releaseYear ?? undefined,
       imageUrl,
     };
   }
 
   return {
-    kind,
+    kind: 'TRACK',
     spotifyId,
-    title:
-      readString(media?.title, media?.name, item.title, review?.title) ??
-      'Titre inconnu',
-    artist:
-      readString(
-        media?.artist,
-        media?.artistName,
-        item.artist,
-        review?.artist,
-      ) ?? 'Artiste inconnu',
-    album: readString(
-      media?.album,
-      media?.albumName,
-      item.album,
-      review?.album,
-    ),
+    title: title || 'Titre inconnu',
+    artist: artist || 'Artiste inconnu',
+    album: media?.album?.trim() || media?.albumName?.trim() || undefined,
     imageUrl,
   };
 }
 
-function getMediaKind(
-  item: UnknownRecord,
-  review: UnknownRecord | null,
-): FeedMediaKind {
-  const media =
-    asRecord(item.media) ??
-    asRecord(item.spotify) ??
-    asRecord(item.item) ??
-    asRecord(review?.media);
-
-  return normalizeKind(
-    media?.type ??
-      item.mediaType ??
-      review?.mediaType ??
-      review?.type ??
-      item.type,
+function normalizeFeedEntry(activity: ApiFeedActivity): NormalizedFeedEntry {
+  const activityType = activity.type.trim().toUpperCase();
+  const author = buildFeedUser(
+    activity.actor,
+    activity.actorId !== null && activity.actorId !== undefined
+      ? String(activity.actorId)
+      : undefined,
   );
-}
-
-function normalizeFeedEntry(entry: unknown): NormalizedFeedEntry | null {
-  const item = asRecord(entry);
-  if (!item) return null;
-
-  const review = asRecord(item.review);
-  const reviewCount = asRecord(review?._count);
-  const itemCount = asRecord(item._count);
-  const activityType = readString(item.type)?.toUpperCase() ?? 'UNKNOWN';
-  const kind = getMediaKind(item, review);
-  const author = normalizeAuthor(item, review);
-  const initialComments = normalizeComments(
-    item.comment ??
-      item.commentsList ??
-      item.commentList ??
-      item.comments ??
-      review?.comment ??
-      review?.commentsList ??
-      review?.commentList ??
-      review?.comments,
-  );
+  const initialComments = collectComments(activity);
+  const review = activity.review;
 
   const share: FeedShare = {
-    id: readId(item.id, review?.id) ?? `feed-${author.id}-${Date.now()}`,
-    reviewId: readNumber(item.reviewId, review?.id),
+    id: String(activity.id),
+    reviewId: review?.id ?? activity.reviewId ?? undefined,
     authorId: author.id,
-    visibility:
-      readString(item.visibility, review?.visibility)?.toUpperCase() ===
-      'FOLLOWERS'
-        ? 'FOLLOWERS'
-        : 'PUBLIC',
-    content:
-      readString(item.content, review?.content, item.caption, item.text) ?? '',
-    createdAt:
-      readString(
-        item.createdAt,
-        item.created_at,
-        review?.createdAt,
-        review?.created_at,
-      ) ?? new Date().toISOString(),
-    shared: normalizeSharedContent(kind, item, review),
-    rating: readNumber(item.rating, review?.rating) ?? 0,
-    likes:
-      readNumber(
-        item.likes,
-        item.likesCount,
-        item.likeCount,
-        itemCount?.likes,
-        itemCount?.likeCount,
-        review?.likes,
-        review?.likesCount,
-        review?.likeCount,
-        reviewCount?.likes,
-        reviewCount?.likeCount,
-        asArray(item.likes).length,
-        asArray(review?.likes).length,
-      ) ?? 0,
-    comments:
-      readNumber(
-        item.comments,
-        item.commentsCount,
-        item.commentCount,
-        itemCount?.comments,
-        itemCount?.commentCount,
-        review?.comments,
-        review?.commentsCount,
-        review?.commentCount,
-        reviewCount?.comments,
-        reviewCount?.commentCount,
-        asArray(item.commentList).length,
-        asArray(item.comments).length,
-        asArray(review?.commentList).length,
-        asArray(review?.comments).length,
-        initialComments.length,
-      ) ?? 0,
-    likedByMe:
-      item.likedByMe === true ||
-      item.isLiked === true ||
-      item.liked === true ||
-      review?.likedByMe === true ||
-      review?.isLiked === true ||
-      review?.liked === true,
+    visibility: review?.visibility === 'FOLLOWERS' ? 'FOLLOWERS' : 'PUBLIC',
+    content: review?.content?.trim() || '',
+    createdAt: review?.createdAt || activity.createdAt,
+    shared: buildSharedContent(activity),
+    rating: review?.rating ?? 0,
+    likes: review?.counts?.likes ?? 0,
+    comments: Math.max(review?.counts?.comments ?? 0, initialComments.length),
+    likedByMe: review?.likedByMe === true,
     initialComments,
   };
 
-  return { share, author, activityType };
+  return { activityType, author, share };
+}
+
+function buildFeedFromGroup(group: NormalizedFeedEntry[]): FeedEntry | null {
+  const createdEntry = group.find(
+    (entry) => entry.activityType === 'REVIEW_CREATED',
+  );
+
+  if (createdEntry) {
+    const likeActivities = group.filter((entry) =>
+      isLikeActivityType(entry.activityType),
+    );
+    const commentActivities = group.filter((entry) =>
+      isCommentActivityType(entry.activityType),
+    );
+    const mergedComments = mergeComments(
+      createdEntry.share.initialComments ?? [],
+      ...commentActivities.map((entry) => entry.share.initialComments ?? []),
+    );
+
+    return {
+      author: createdEntry.author,
+      share: {
+        ...createdEntry.share,
+        likes: Math.max(
+          createdEntry.share.likes,
+          ...group.map((entry) => entry.share.likes),
+          likeActivities.length,
+        ),
+        comments: Math.max(
+          createdEntry.share.comments,
+          ...group.map((entry) => entry.share.comments),
+          commentActivities.length,
+          mergedComments.length,
+        ),
+        likedByMe: group.some((entry) => entry.share.likedByMe === true),
+        initialComments: mergedComments,
+      },
+    };
+  }
+
+  const listItemEntry = group.find(
+    (entry) => entry.activityType === 'LIST_ITEM_ADDED',
+  );
+  if (listItemEntry) {
+    return {
+      author: listItemEntry.author,
+      share: listItemEntry.share,
+    };
+  }
+
+  return null;
 }
 
 export async function getFeed(limit = 40): Promise<FeedEntry[]> {
-  const response = await api<unknown>(`/feed?limit=${limit}`);
-  const root = asRecord(response);
-  const items = Array.isArray(response)
-    ? response
-    : asArray(root?.activities).length > 0
-      ? asArray(root?.activities)
-      : asArray(root?.items).length > 0
-        ? asArray(root?.items)
-        : asArray(root?.feed).length > 0
-          ? asArray(root?.feed)
-          : asArray(root?.data);
-
-  const normalizedEntries = items
-    .map(normalizeFeedEntry)
-    .filter((entry): entry is NormalizedFeedEntry => Boolean(entry));
+  const response = await api<FeedResponse>(`/feed?limit=${limit}`);
+  const normalizedEntries = response.activities.map(normalizeFeedEntry);
 
   const groupedEntries = new Map<string, NormalizedFeedEntry[]>();
   for (const entry of normalizedEntries) {
@@ -426,44 +319,8 @@ export async function getFeed(limit = 40): Promise<FeedEntry[]> {
   }
 
   return [...groupedEntries.values()]
-    .map((group) => {
-      const createdEntry = group.find(
-        (entry) => entry.activityType === 'REVIEW_CREATED',
-      );
-      if (!createdEntry) return null;
-
-      const likeActivities = group.filter((entry) =>
-        isLikeActivityType(entry.activityType),
-      );
-      const commentActivities = group.filter((entry) =>
-        isCommentActivityType(entry.activityType),
-      );
-      const mergedComments = mergeComments(
-        createdEntry.share.initialComments ?? [],
-        ...commentActivities.map((entry) => entry.share.initialComments ?? []),
-      );
-
-      return {
-        author: createdEntry.author,
-        share: {
-          ...createdEntry.share,
-          likes: Math.max(
-            createdEntry.share.likes,
-            ...group.map((entry) => entry.share.likes),
-            likeActivities.length,
-          ),
-          comments: Math.max(
-            createdEntry.share.comments,
-            ...group.map((entry) => entry.share.comments),
-            commentActivities.length,
-            mergedComments.length,
-          ),
-          likedByMe: group.some((entry) => entry.share.likedByMe === true),
-          initialComments: mergedComments,
-        },
-      };
-    })
-    .filter((entry): entry is FeedEntry => Boolean(entry))
+    .map(buildFeedFromGroup)
+    .filter((entry): entry is FeedEntry => entry !== null)
     .sort((a, b) => {
       const scoreA = a.share.likes + a.share.comments * 2;
       const scoreB = b.share.likes + b.share.comments * 2;
