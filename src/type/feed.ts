@@ -16,6 +16,11 @@ export type FeedComment = {
   author: FeedUser;
 };
 
+export type FeedLike = {
+  createdAt: string;
+  user: FeedUser;
+};
+
 export type SharedTrackContent = {
   kind: 'TRACK';
   spotifyId?: string;
