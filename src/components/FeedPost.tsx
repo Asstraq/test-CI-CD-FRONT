@@ -3,12 +3,11 @@
 import {
   createReviewComment,
   getReviewComments,
-  likeReview,
-  unlikeReview,
 } from '@/lib/api/feed-interactions.api';
 import { getToken } from '@/lib/auth/token';
+import { useReviewLikes } from '@/hooks/useReviewLikes';
 import { buildProfileHref } from '@/lib/profile/profileHref';
-import type { FeedComment, FeedShare, FeedUser } from '@/type/feed';
+import type { FeedComment, FeedLike, FeedShare, FeedUser } from '@/type/feed';
 import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import AlbumRoundedIcon from '@mui/icons-material/AlbumRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
@@ -27,6 +26,9 @@ import {
   Chip,
   CircularProgress,
   Collapse,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Paper,
   Stack,
@@ -109,11 +111,7 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   const authorHref = buildProfileHref(author);
   const isAuthenticated = Boolean(getToken());
   const reviewId = share.reviewId;
-  const canInteract = isAuthenticated && typeof reviewId === 'number';
-
-  const [likes, setLikes] = useState(share.likes);
-  const [likedByMe, setLikedByMe] = useState(Boolean(share.likedByMe));
-  const [likeLoading, setLikeLoading] = useState(false);
+  const [likesDialogOpen, setLikesDialogOpen] = useState(false);
   const [commentsVisible, setCommentsVisible] = useState(
     Array.isArray(share.initialComments) && share.initialComments.length > 0,
   );
@@ -128,29 +126,23 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
+  const {
+    canInteract,
+    likeEntries,
+    likeLoading,
+    likedByMe,
+    likes,
+    likesError,
+    likesLoaded,
+    likesLoading,
+    refreshLikes,
+    toggleLike,
+  } = useReviewLikes({
+    reviewId,
+    initialLikes: share.likes,
+    initialLikedByMe: share.likedByMe,
+  });
   const commentsCount = Math.max(share.comments, comments.length);
-
-  const handleToggleLike = async () => {
-    if (!canInteract || likeLoading || typeof reviewId !== 'number') return;
-
-    const nextLiked = !likedByMe;
-    setLikeLoading(true);
-    setLikedByMe(nextLiked);
-    setLikes((prev) => Math.max(0, prev + (nextLiked ? 1 : -1)));
-
-    try {
-      if (nextLiked) {
-        await likeReview(String(reviewId));
-      } else {
-        await unlikeReview(String(reviewId));
-      }
-    } catch {
-      setLikedByMe(!nextLiked);
-      setLikes((prev) => Math.max(0, prev + (nextLiked ? -1 : 1)));
-    } finally {
-      setLikeLoading(false);
-    }
-  };
 
   const loadComments = useCallback(async () => {
     if (commentsLoading || typeof reviewId !== 'number') return;
@@ -172,6 +164,10 @@ export default function FeedPost({ share, author }: FeedPostProps) {
       setCommentsLoading(false);
     }
   }, [commentsLoading, reviewId]);
+
+  useEffect(() => {
+    setLikesDialogOpen(false);
+  }, [share.id]);
 
   useEffect(() => {
     if (
@@ -198,6 +194,18 @@ export default function FeedPost({ share, author }: FeedPostProps) {
     ) {
       await loadComments();
     }
+  };
+
+  const handleOpenLikesDialog = async () => {
+    setLikesDialogOpen(true);
+
+    if (!likesLoaded && !likesLoading && typeof reviewId === 'number') {
+      await refreshLikes();
+    }
+  };
+
+  const handleCloseLikesDialog = () => {
+    setLikesDialogOpen(false);
   };
 
   const handleSubmitComment = async () => {
@@ -233,6 +241,68 @@ export default function FeedPost({ share, author }: FeedPostProps) {
     } finally {
       setCommentSubmitting(false);
     }
+  };
+
+  const renderLike = (entry: FeedLike, index: number) => {
+    const likeAuthorHref = buildProfileHref(entry.user);
+
+    return (
+      <Paper
+        key={`${entry.user.id}-${entry.createdAt}-${index}`}
+        variant="outlined"
+        sx={{
+          p: 1.25,
+          borderRadius: 2,
+          borderColor: 'rgba(112, 130, 180, 0.18)',
+          backgroundColor: '#fafbff',
+        }}
+      >
+        <Stack direction="row" spacing={1.25} alignItems="center">
+          {likeAuthorHref ? (
+            <Link
+              href={likeAuthorHref}
+              style={{ color: 'inherit', textDecoration: 'none' }}
+            >
+              <Avatar src={entry.user.avatarUrl || undefined}>
+                {entry.user.name.charAt(0).toUpperCase()}
+              </Avatar>
+            </Link>
+          ) : (
+            <Avatar src={entry.user.avatarUrl || undefined}>
+              {entry.user.name.charAt(0).toUpperCase()}
+            </Avatar>
+          )}
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            {likeAuthorHref ? (
+              <Typography
+                component={Link}
+                href={likeAuthorHref}
+                sx={{
+                  fontWeight: 700,
+                  color: '#1b2130',
+                  textDecoration: 'none',
+                  display: 'block',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+                noWrap
+              >
+                {entry.user.name}
+              </Typography>
+            ) : (
+              <Typography sx={{ fontWeight: 700 }} noWrap>
+                {entry.user.name}
+              </Typography>
+            )}
+            <Typography variant="body2" sx={{ color: '#5c6780' }} noWrap>
+              {entry.user.handle || entry.user.email || 'Utilisateur'}
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: '#75819a' }}>
+            {getDateLabel(entry.createdAt)}
+          </Typography>
+        </Stack>
+      </Paper>
+    );
   };
 
   const renderComment = (comment: FeedComment) => {
@@ -449,42 +519,63 @@ export default function FeedPost({ share, author }: FeedPostProps) {
         </Paper>
 
         <Stack
-          direction="row"
+          direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
           sx={{ color: '#5f6f92' }}
           justifyContent={isMobile ? 'space-between' : 'flex-start'}
         >
-          <Button
-            size="small"
-            startIcon={
-              likeLoading ? (
-                <CircularProgress size={14} />
-              ) : likedByMe ? (
-                <FavoriteRoundedIcon fontSize="small" />
-              ) : (
-                <FavoriteBorderRoundedIcon fontSize="small" />
-              )
-            }
-            onClick={handleToggleLike}
-            disabled={!canInteract || likeLoading}
-            sx={{
-              color: likedByMe ? '#d9485f' : '#5f6f92',
-              minWidth: 0,
-              px: 1,
-            }}
-          >
-            {likes}
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button
+              size="small"
+              startIcon={
+                likeLoading || (likesLoading && canInteract) ? (
+                  <CircularProgress size={14} />
+                ) : likedByMe ? (
+                  <FavoriteRoundedIcon fontSize="small" />
+                ) : (
+                  <FavoriteBorderRoundedIcon fontSize="small" />
+                )
+              }
+              onClick={() => void toggleLike()}
+              disabled={!canInteract || likeLoading || !likesLoaded}
+              sx={{
+                color: likedByMe ? '#d9485f' : '#5f6f92',
+                minWidth: 0,
+                px: 1,
+              }}
+            >
+              {likes}
+            </Button>
+            <Button
+              size="small"
+              onClick={() => void handleOpenLikesDialog()}
+              disabled={typeof reviewId !== 'number' || likeLoading}
+              sx={{ color: '#5f6f92', minWidth: 0, px: 1 }}
+            >
+              Voir les likes
+            </Button>
+          </Stack>
           <Button
             size="small"
             startIcon={<ChatBubbleOutlineRoundedIcon fontSize="small" />}
             onClick={() => void handleToggleComments()}
             disabled={!canInteract && share.comments <= 0}
-            sx={{ color: '#5f6f92', minWidth: 0, px: 1 }}
+            sx={{
+              color: '#5f6f92',
+              minWidth: 0,
+              px: 1,
+              alignSelf: 'flex-start',
+            }}
           >
             {commentsCount}
           </Button>
         </Stack>
+
+        {likesError ? (
+          <Typography variant="body2" sx={{ color: '#c62828' }}>
+            {likesError}
+          </Typography>
+        ) : null}
 
         <Collapse in={commentsVisible} unmountOnExit>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
@@ -544,6 +635,35 @@ export default function FeedPost({ share, author }: FeedPostProps) {
           </Stack>
         </Collapse>
       </Stack>
+
+      <Dialog
+        open={likesDialogOpen}
+        onClose={handleCloseLikesDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Likes ({likes})</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.25}>
+            {likesLoading && !likesLoaded ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CircularProgress size={18} />
+                <Typography variant="body2">
+                  Chargement des utilisateurs...
+                </Typography>
+              </Stack>
+            ) : null}
+
+            {!likesLoading && likesLoaded && likeEntries.length === 0 ? (
+              <Typography variant="body2" sx={{ color: '#5c6780' }}>
+                Aucun like pour le moment.
+              </Typography>
+            ) : null}
+
+            {likesLoaded ? likeEntries.map(renderLike) : null}
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </Paper>
   );
 }
