@@ -6,6 +6,7 @@ import {
   getReviewComments,
 } from '@/lib/api/feed-interactions.api';
 import { getToken } from '@/lib/auth/token';
+import { useUserSession } from '@/lib/auth/userSession';
 import { useReviewLikes } from '@/hooks/useReviewLikes';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { FeedComment, FeedLike, FeedShare, FeedUser } from '@/type/feed';
@@ -115,6 +116,7 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   const authorInitial = author.name.trim().charAt(0).toUpperCase();
   const authorHref = buildProfileHref(author);
   const isAuthenticated = Boolean(getToken());
+  const currentUserId = user?.user.id ? String(user.user.id) : null;
   const reviewId = share.reviewId;
   const [likesDialogOpen, setLikesDialogOpen] = useState(false);
   const [commentsVisible, setCommentsVisible] = useState(
@@ -150,6 +152,10 @@ export default function FeedPost({ share, author }: FeedPostProps) {
     initialLikedByMe: share.likedByMe,
   });
   const commentsCount = Math.max(share.comments, comments.length);
+  const canReport =
+    isAuthenticated &&
+    typeof reviewId === 'number' &&
+    (!currentUserId || String(author.id) !== currentUserId);
 
   const loadComments = useCallback(async () => {
     if (commentsLoading || typeof reviewId !== 'number') return;
@@ -213,6 +219,14 @@ export default function FeedPost({ share, author }: FeedPostProps) {
 
   const handleCloseLikesDialog = () => {
     setLikesDialogOpen(false);
+  };
+
+  const handleCloseReport = () => {
+    setReportOpen(false);
+  };
+
+  const handleReportSuccess = (message: string) => {
+    setReportSuccess(message);
   };
 
   const handleSubmitComment = async () => {
@@ -681,6 +695,25 @@ export default function FeedPost({ share, author }: FeedPostProps) {
           </Stack>
         </DialogContent>
       </Dialog>
+
+      {typeof reviewId === 'number' ? (
+        <ReportContentDialog
+          open={reportOpen}
+          onClose={handleCloseReport}
+          onReported={handleReportSuccess}
+          targetType="REVIEW"
+          targetId={reviewId}
+          title="Signaler cette publication"
+          description="Explique a la moderation pourquoi cette publication pose probleme."
+        />
+      ) : null}
+
+      <Snackbar
+        open={Boolean(reportSuccess)}
+        autoHideDuration={4000}
+        onClose={() => setReportSuccess('')}
+        message={reportSuccess}
+      />
     </Paper>
   );
 }
