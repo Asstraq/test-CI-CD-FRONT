@@ -1,84 +1,68 @@
 import { api } from '@/lib/api/http';
-import type { FeedComment, FeedUser } from '@/type/feed';
+import type { FeedComment, FeedLike, FeedUser } from '@/type/feed';
 
-type UnknownRecord = Record<string, unknown>;
+type ApiFeedUser = {
+  id: number | string;
+  nom?: string | null;
+  prenom?: string | null;
+  pseudo?: string | null;
+  email?: string | null;
+  avatarUrl?: string | null;
+};
 
-function asRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === 'object' ? (value as UnknownRecord) : null;
-}
+type ReviewLikeDto = {
+  createdAt: string;
+  user: ApiFeedUser;
+};
 
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
+type ReviewLikesResponse = {
+  count: number;
+  likes: ReviewLikeDto[];
+};
 
-function readString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  return undefined;
-}
+type ReviewCommentDto = {
+  id: number | string;
+  content: string;
+  createdAt: string;
+  user: ApiFeedUser;
+};
 
-function readId(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value;
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return String(value);
-    }
-  }
-  return undefined;
-}
+type ReviewCommentsResponse = {
+  comments: ReviewCommentDto[];
+};
 
-function normalizeAuthor(source: UnknownRecord | null): FeedUser {
+function buildFeedUser(user: ApiFeedUser): FeedUser {
+  const fullName = [user.prenom?.trim(), user.nom?.trim()]
+    .filter(Boolean)
+    .join(' ');
   const name =
-    readString(
-      source?.name,
-      source?.nom,
-      source?.username,
-      source?.handle,
-      source?.email,
-    ) ?? 'Utilisateur';
-  const handleBase =
-    readString(source?.handle, source?.username, source?.slug, source?.name) ??
-    name;
+    fullName || user.nom?.trim() || user.prenom?.trim() || 'Utilisateur';
+  const handleBase = user.pseudo?.trim() || name;
 
   return {
-    id: readId(source?.id, source?.userId, source?.email) ?? 'unknown-user',
-    email: readString(source?.email) ?? '',
+    id: String(user.id),
+    email: user.email?.trim() || '',
     name,
     handle: handleBase.startsWith('@')
       ? handleBase
       : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl:
-      readString(
-        source?.avatarUrl,
-        source?.avatar,
-        source?.imageUrl,
-        source?.photoUrl,
-      ) ?? '',
+    avatarUrl: user.avatarUrl?.trim() || '',
   };
 }
 
-function normalizeComment(entry: unknown): FeedComment | null {
-  const wrapper = asRecord(entry);
-  const item =
-    asRecord(wrapper?.comment) ??
-    asRecord(wrapper?.data) ??
-    asRecord(wrapper?.item) ??
-    wrapper;
-  if (!item) return null;
-
-  const author =
-    asRecord(item.author) ??
-    asRecord(item.actor) ??
-    asRecord(item.user) ??
-    asRecord(item.owner);
-
+function buildFeedComment(comment: ReviewCommentDto): FeedComment {
   return {
-    id: readString(item.id, item.commentId) ?? `comment-${Date.now()}`,
-    content: readString(item.content, item.text, item.body) ?? '',
-    createdAt:
-      readString(item.createdAt, item.created_at) ?? new Date().toISOString(),
-    author: normalizeAuthor(author),
+    id: String(comment.id),
+    content: comment.content,
+    createdAt: comment.createdAt,
+    author: buildFeedUser(comment.user),
+  };
+}
+
+function buildFeedLike(like: ReviewLikeDto): FeedLike {
+  return {
+    createdAt: like.createdAt,
+    user: buildFeedUser(like.user),
   };
 }
 
@@ -94,40 +78,50 @@ export function unlikeReview(reviewId: string) {
   });
 }
 
+export async function getReviewLikes(reviewId: string): Promise<{
+  count: number;
+  likes: FeedLike[];
+}> {
+  const response = await api<ReviewLikesResponse>(
+    `/reviews/${reviewId}/likes`,
+    {
+      auth: false,
+    },
+  );
+
+  const likes = response.likes
+    .map(buildFeedLike)
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+
+  return {
+    count: Math.max(response.count, likes.length),
+    likes,
+  };
+}
+
 export async function getReviewComments(
   reviewId: string,
 ): Promise<FeedComment[]> {
-  const response = await api<unknown>(`/reviews/${reviewId}/comments`, {
-    auth: false,
-  });
-  const root = asRecord(response);
-  const items = Array.isArray(response)
-    ? response
-    : Array.isArray(root?.comments)
-      ? root.comments
-      : Array.isArray(asRecord(root?.data)?.comments)
-        ? (asRecord(root?.data)?.comments as unknown[])
-        : asArray(root?.items).length > 0
-          ? asArray(root?.items)
-          : asArray(root?.data).length > 0
-            ? asArray(root?.data)
-            : root?.comment
-              ? [root.comment]
-              : root?.comments && typeof root.comments === 'object'
-                ? [root.comments]
-                : [];
+  const response = await api<ReviewCommentsResponse>(
+    `/reviews/${reviewId}/comments`,
+    {
+      auth: false,
+    },
+  );
 
-  return items
-    .map(normalizeComment)
-    .filter((comment): comment is FeedComment => Boolean(comment))
+  return response.comments
+    .map(buildFeedComment)
     .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
 }
 
 export async function createReviewComment(reviewId: string, content: string) {
-  const response = await api<unknown>(`/reviews/${reviewId}/comments`, {
-    method: 'POST',
-    body: { content },
-  });
+  const response = await api<ReviewCommentDto>(
+    `/reviews/${reviewId}/comments`,
+    {
+      method: 'POST',
+      body: { content },
+    },
+  );
 
-  return normalizeComment(response);
+  return buildFeedComment(response);
 }
