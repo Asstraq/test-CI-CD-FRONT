@@ -3,7 +3,7 @@ import type { FeedMediaKind } from '@/type/feed';
 
 type UpsertReviewPayload = {
   content: string;
-  rating?: number;
+  rating?: number | null;
   containsSpoilers?: boolean;
 };
 
@@ -43,16 +43,14 @@ function normalizeUpsertReviewResponse(response: unknown): UpsertReviewResult {
   };
 }
 
-function toApiKind(kind: FeedMediaKind): string {
-  return kind.toLowerCase();
-}
-
 function buildBodies(payload: UpsertReviewPayload) {
   const baseBody: Record<string, unknown> = {
     content: payload.content,
   };
 
-  if (typeof payload.rating === 'number') {
+  if (payload.rating === null) {
+    baseBody.rating = null;
+  } else if (typeof payload.rating === 'number') {
     baseBody.rating = payload.rating;
   }
 
@@ -74,10 +72,7 @@ export function upsertReview(
   spotifyId: string,
   payload: UpsertReviewPayload,
 ): Promise<UpsertReviewResult> {
-  const pathVariants = [
-    `/reviews/media/${toApiKind(kind)}/${spotifyId}/review`,
-    `/reviews/media/${kind}/${spotifyId}/review`,
-  ];
+  const path = `/reviews/media/${kind}/${spotifyId}/review`;
   const bodyVariants = buildBodies(payload);
 
   let lastError: unknown;
@@ -92,15 +87,13 @@ export function upsertReview(
   }
 
   return (async () => {
-    for (const path of pathVariants) {
-      for (const body of bodyVariants) {
-        try {
-          return await tryRequest(path, body);
-        } catch (error) {
-          lastError = error;
-          if (!(error instanceof Error) || !/400/.test(error.message)) {
-            throw error;
-          }
+    for (const body of bodyVariants) {
+      try {
+        return await tryRequest(path, body);
+      } catch (error) {
+        lastError = error;
+        if (!(error instanceof Error) || !/400/.test(error.message)) {
+          throw error;
         }
       }
     }
