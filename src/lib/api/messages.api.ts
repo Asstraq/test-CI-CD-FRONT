@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/http';
+import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
 import type {
   ConversationMessage,
   ConversationSummary,
@@ -44,39 +45,7 @@ function readNumber(...values: unknown[]): number | undefined {
 }
 
 function normalizeUser(entry: unknown): MessageUser {
-  const item = asRecord(entry);
-  const name =
-    readString(
-      item?.name,
-      item?.nom,
-      item?.username,
-      item?.handle,
-      item?.email,
-    ) ?? 'Utilisateur';
-  const handleBase =
-    readString(
-      item?.handle,
-      item?.username,
-      item?.slug,
-      item?.name,
-      item?.nom,
-    ) ?? name;
-
-  return {
-    id: readId(item?.id, item?.userId, item?.email) ?? 'unknown-user',
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    email: readString(item?.email) ?? '',
-    avatarUrl:
-      readString(
-        item?.avatarUrl,
-        item?.avatar,
-        item?.imageUrl,
-        item?.photoUrl,
-      ) ?? '',
-  };
+  return buildPublicUserIdentity(asRecord(entry));
 }
 
 function normalizeMessage(entry: unknown): ConversationMessage | null {

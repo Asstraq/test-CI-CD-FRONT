@@ -41,6 +41,7 @@ import {
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 type ComposerState = {
@@ -101,6 +102,7 @@ function isComposerValid(state: ComposerState) {
 }
 
 export default function HomeFeedPage() {
+  const searchParams = useSearchParams();
   const { user, setUser } = useUserSession();
   const hasToken = Boolean(getToken());
   const canAccessFeed = hasToken;
@@ -186,6 +188,21 @@ export default function HomeFeedPage() {
       active = false;
     };
   }, [canAccessFeed]);
+
+  useEffect(() => {
+    const reviewId = searchParams.get('reviewId');
+    if (!reviewId || feedLoading || feed.length === 0) return;
+
+    const target = document.getElementById(`feed-review-${reviewId}`);
+    if (!target) return;
+
+    window.setTimeout(() => {
+      target.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 80);
+  }, [feed, feedLoading, searchParams]);
 
   useEffect(() => {
     if (!canAccessFeed) return;

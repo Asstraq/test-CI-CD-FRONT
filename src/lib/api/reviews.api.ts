@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/http';
+import { buildReview } from '@/lib/review/buildPublicReview';
 import type { FeedMediaKind } from '@/type/feed';
 
 type UpsertReviewPayload = {
@@ -32,13 +33,14 @@ function normalizeUpsertReviewResponse(response: unknown): UpsertReviewResult {
   const root = asRecord(response);
   const review =
     asRecord(root?.review) ?? asRecord(root?.data) ?? asRecord(root?.item);
+  const normalizedReview = buildReview(review);
 
   return {
     reviewId: readNumber(
       root?.reviewId,
       root?.id,
       review?.reviewId,
-      review?.id,
+      normalizedReview.id > 0 ? normalizedReview.id : undefined,
     ),
   };
 }

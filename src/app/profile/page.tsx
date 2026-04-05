@@ -5,9 +5,13 @@ import * as PlaylistAPI from '@/lib/api/playlist.api';
 import TrackPreviewArtwork from '@/components/TrackPreviewArtwork';
 import { buildProfileHref } from '@/lib/profile/profileHref';
 import {
+  acceptFollowRequest,
   followUser,
+  getIncomingFollowRequests,
   getMyFollowers,
   getMyFollowing,
+  rejectFollowRequest,
+  type SocialFollowRequest,
   type SocialProfile,
 } from '@/lib/api/social.api';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -41,6 +45,7 @@ import {
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -124,9 +129,11 @@ function getProfileDisplayName(user?: User | null) {
 }
 
 export default function ProfilePage() {
+  const searchParams = useSearchParams();
   const { user: userObject, setUser } = useUserSession();
   const user = userObject?.user;
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const requestsSectionRef = useRef<HTMLDivElement | null>(null);
   const {
     favoritesPlaylist,
     loading: favoritesLoading,
@@ -148,9 +155,13 @@ export default function ProfilePage() {
   const [playlistError, setPlaylistError] = useState('');
   const [following, setFollowing] = useState<SocialProfile[]>([]);
   const [followers, setFollowers] = useState<SocialProfile[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<
+    SocialFollowRequest[]
+  >([]);
   const [socialLoading, setSocialLoading] = useState(false);
   const [socialError, setSocialError] = useState('');
   const [socialActionId, setSocialActionId] = useState<string | null>(null);
+  const [requestActionId, setRequestActionId] = useState<string | null>(null);
   const [newFollowers, setNewFollowers] = useState<SocialProfile[]>([]);
   const [newFollowersOpen, setNewFollowersOpen] = useState(false);
   const [profileForm, setProfileForm] = useState<ProfileFormState>(() =>
@@ -262,13 +273,15 @@ export default function ProfilePage() {
       setSocialLoading(true);
       setSocialError('');
 
-      const [myFollowing, myFollowers] = await Promise.all([
+      const [myFollowing, myFollowers, myIncomingRequests] = await Promise.all([
         getMyFollowing(),
         getMyFollowers(),
+        getIncomingFollowRequests(),
       ]);
 
       setFollowing(myFollowing);
       setFollowers(myFollowers);
+      setIncomingRequests(myIncomingRequests);
 
       const knownFollowerIds = new Set(readKnownFollowers(user.id));
       const unseenFollowers = myFollowers.filter(
@@ -301,6 +314,18 @@ export default function ProfilePage() {
   }, [loadSocialGraph, user?.id]);
 
   useEffect(() => {
+    if (searchParams.get('section') !== 'requests') return;
+    if (!requestsSectionRef.current) return;
+
+    window.setTimeout(() => {
+      requestsSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  }, [incomingRequests.length, searchParams]);
+
+  useEffect(() => {
     if (!selectedId) return;
     if (selectedId === favoritesId) return;
     void loadPlaylistById(selectedId);
@@ -331,6 +356,32 @@ export default function ProfilePage() {
       await loadSocialGraph();
     } finally {
       setSocialActionId(null);
+    }
+  };
+
+  const handleAcceptRequest = async (request: SocialFollowRequest) => {
+    const requesterId = request.requester?.id;
+    if (!requesterId) return;
+
+    try {
+      setRequestActionId(request.id);
+      await acceptFollowRequest(requesterId);
+      await loadSocialGraph();
+    } finally {
+      setRequestActionId(null);
+    }
+  };
+
+  const handleRejectRequest = async (request: SocialFollowRequest) => {
+    const requesterId = request.requester?.id;
+    if (!requesterId) return;
+
+    try {
+      setRequestActionId(request.id);
+      await rejectFollowRequest(requesterId);
+      await loadSocialGraph();
+    } finally {
+      setRequestActionId(null);
     }
   };
 
@@ -686,6 +737,94 @@ export default function ProfilePage() {
             ) : null}
 
             <Divider />
+
+            <Paper
+              ref={requestsSectionRef}
+              variant="outlined"
+              sx={{
+                width: '100%',
+                borderRadius: 3,
+                p: 2,
+                bgcolor: 'rgba(248, 249, 255, 0.92)',
+                scrollMarginTop: '96px',
+              }}
+            >
+              <Stack spacing={1.5}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 700, color: '#1a1d24' }}
+                >
+                  Invitations
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#64748b' }}>
+                  Gérez ici les demandes de follow reçues.
+                </Typography>
+
+                {socialLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : incomingRequests.length > 0 ? (
+                  <List sx={{ py: 0 }}>
+                    {incomingRequests.map((request) => {
+                      const requester = request.requester;
+                      if (!requester) return null;
+                      const profileHref = buildProfileHref(requester);
+
+                      return (
+                        <ListItem key={`request-${request.id}`} sx={{ px: 0 }}>
+                          <ListItemAvatar>
+                            {profileHref ? (
+                              <Link
+                                href={profileHref}
+                                style={{
+                                  color: 'inherit',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                <Avatar src={requester.avatarUrl || undefined}>
+                                  {requester.name.charAt(0).toUpperCase()}
+                                </Avatar>
+                              </Link>
+                            ) : (
+                              <Avatar src={requester.avatarUrl || undefined}>
+                                {requester.name.charAt(0).toUpperCase()}
+                              </Avatar>
+                            )}
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={renderLinkedProfileName(requester)}
+                            secondary={requester.email || requester.handle}
+                          />
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={() => void handleAcceptRequest(request)}
+                              disabled={requestActionId === request.id}
+                            >
+                              Accepter
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => void handleRejectRequest(request)}
+                              disabled={requestActionId === request.id}
+                            >
+                              Refuser
+                            </Button>
+                          </Stack>
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Aucune invitation en attente.
+                  </Typography>
+                )}
+              </Stack>
+            </Paper>
 
             <Stack
               direction={{ xs: 'column', md: 'row' }}

@@ -1,5 +1,6 @@
 'use client';
 
+import NotificationsMenu from '@/components/NotificationsMenu';
 import { Role } from '@/enum/roles';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserSession } from '@/lib/auth/userSession';
@@ -14,15 +15,17 @@ export default function Navbar() {
 
   return (
     <AppBar
-      position="sticky"
+      position="relative"
       elevation={0}
       sx={{
+        zIndex: (theme) => theme.zIndex.appBar,
+        overflow: 'visible',
         backgroundColor: 'rgba(255,255,255,0.85)',
         borderBottom: '1px solid rgba(0,0,0,0.06)',
         backdropFilter: 'blur(8px)',
       }}
     >
-      <Toolbar sx={{ justifyContent: 'space-between' }}>
+      <Toolbar sx={{ justifyContent: 'space-between', overflow: 'visible' }}>
         <Typography
           component={Link}
           href="/"
@@ -34,6 +37,7 @@ export default function Navbar() {
         <Box sx={{ display: 'flex', gap: 1 }}>
           {user ? (
             <>
+              <NotificationsMenu />
               <Button
                 component={Link}
                 href="/messages"

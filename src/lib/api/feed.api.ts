@@ -1,11 +1,12 @@
 import { api } from '@/lib/api/http';
+import { buildReview } from '@/lib/review/buildPublicReview';
+import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
 import type {
   FeedComment,
   FeedEntry,
   FeedMediaKind,
   FeedShare,
   FeedSharedContent,
-  FeedUser,
 } from '@/type/feed';
 
 type ApiFeedUser = {
@@ -108,42 +109,12 @@ function isCommentActivityType(activityType: string) {
   return activityType.includes('COMMENT');
 }
 
-function buildFeedUser(
-  user?: ApiFeedUser | null,
-  fallbackId?: string,
-): FeedUser {
-  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
-    .filter(Boolean)
-    .join(' ');
-  const name =
-    fullName ||
-    user?.nom?.trim() ||
-    user?.prenom?.trim() ||
-    user?.pseudo?.trim() ||
-    user?.email?.trim() ||
-    'Utilisateur';
-  const handleBase = user?.pseudo?.trim() || name;
-
-  return {
-    id:
-      (user?.id !== null && user?.id !== undefined ? String(user.id) : '') ||
-      fallbackId ||
-      'unknown-user',
-    email: user?.email?.trim() || '',
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl: user?.avatarUrl?.trim() || '',
-  };
-}
-
 function buildComment(comment: ApiFeedComment): FeedComment {
   return {
     id: String(comment.id),
     content: comment.content,
     createdAt: comment.createdAt,
-    author: buildFeedUser(comment.user ?? comment.author),
+    author: buildPublicUserIdentity(comment.user ?? comment.author),
   };
 }
 
@@ -225,27 +196,28 @@ function buildSharedContent(activity: ApiFeedActivity): FeedSharedContent {
 
 function normalizeFeedEntry(activity: ApiFeedActivity): NormalizedFeedEntry {
   const activityType = activity.type.trim().toUpperCase();
-  const author = buildFeedUser(
-    activity.actor,
-    activity.actorId !== null && activity.actorId !== undefined
-      ? String(activity.actorId)
-      : undefined,
-  );
+  const author = buildPublicUserIdentity(activity.actor, {
+    fallbackId:
+      activity.actorId !== null && activity.actorId !== undefined
+        ? String(activity.actorId)
+        : undefined,
+  });
   const initialComments = collectComments(activity);
-  const review = activity.review;
+  const review = buildReview(activity.review);
 
   const share: FeedShare = {
     id: String(activity.id),
-    reviewId: review?.id ?? activity.reviewId ?? undefined,
+    reviewId: review.id > 0 ? review.id : (activity.reviewId ?? undefined),
     authorId: author.id,
-    visibility: review?.visibility === 'FOLLOWERS' ? 'FOLLOWERS' : 'PUBLIC',
-    content: review?.content?.trim() || '',
-    createdAt: review?.createdAt || activity.createdAt,
+    visibility:
+      activity.review?.visibility === 'FOLLOWERS' ? 'FOLLOWERS' : 'PUBLIC',
+    content: review.content?.trim() || '',
+    createdAt: review.createdAt || activity.createdAt,
     shared: buildSharedContent(activity),
-    rating: review?.rating ?? 0,
-    likes: review?.counts?.likes ?? 0,
-    comments: Math.max(review?.counts?.comments ?? 0, initialComments.length),
-    likedByMe: review?.likedByMe === true,
+    rating: review.rating ?? 0,
+    likes: review.likesCount ?? 0,
+    comments: Math.max(review.commentsCount ?? 0, initialComments.length),
+    likedByMe: review.likedByMe === true,
     initialComments,
   };
 

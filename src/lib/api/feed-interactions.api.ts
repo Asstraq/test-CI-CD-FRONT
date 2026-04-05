@@ -1,5 +1,10 @@
 import { api } from '@/lib/api/http';
-import type { FeedComment, FeedLike, FeedUser } from '@/type/feed';
+import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
+import {
+  buildReviewComment,
+  buildReviewLike,
+} from '@/lib/review/buildPublicReview';
+import type { FeedComment, FeedLike } from '@/type/feed';
 
 type ApiFeedUser = {
   id: number | string;
@@ -35,41 +40,23 @@ type ReviewCommentsResponse = {
   comments: ReviewCommentDto[];
 };
 
-function buildFeedUser(user?: ApiFeedUser | null): FeedUser {
-  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
-    .filter(Boolean)
-    .join(' ');
-  const name =
-    fullName || user?.nom?.trim() || user?.prenom?.trim() || 'Utilisateur';
-  const handleBase = user?.pseudo?.trim() || name;
-
-  return {
-    id:
-      user?.id !== null && user?.id !== undefined
-        ? String(user.id)
-        : 'unknown-user',
-    email: user?.email?.trim() || '',
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl: user?.avatarUrl?.trim() || '',
-  };
-}
-
 function buildFeedComment(comment: ReviewCommentDto): FeedComment {
+  const normalized = buildReviewComment(comment);
+
   return {
-    id: String(comment.id),
-    content: comment.content,
-    createdAt: comment.createdAt,
-    author: buildFeedUser(comment.user),
+    id: String(normalized.id),
+    content: normalized.content,
+    createdAt: normalized.createdAt ?? new Date().toISOString(),
+    author: buildPublicUserIdentity(normalized.user),
   };
 }
 
 function buildFeedLike(like: ReviewLikeDto): FeedLike {
+  const normalized = buildReviewLike(like);
+
   return {
-    createdAt: like.createdAt,
-    user: buildFeedUser(like.user),
+    createdAt: normalized.createdAt ?? new Date().toISOString(),
+    user: buildPublicUserIdentity(normalized.user),
   };
 }
 
