@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/http';
+import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -18,45 +19,11 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function readString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value;
-  }
-  return undefined;
-}
-
-function readId(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value;
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return String(value);
-    }
-  }
-  return undefined;
-}
-
 function normalizeUser(entry: unknown): SocialProfile | null {
   const item = asRecord(entry);
   if (!item) return null;
 
-  const name =
-    readString(item.name, item.nom, item.prenom, item.username, item.email) ??
-    'Utilisateur';
-  const handleBase =
-    readString(item.handle, item.username, item.slug, item.name, item.nom) ??
-    name;
-
-  return {
-    id: readId(item.id, item.userId, item.email) ?? '',
-    email: readString(item.email) ?? '',
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl:
-      readString(item.avatarUrl, item.avatar, item.imageUrl, item.photoUrl) ??
-      '',
-  };
+  return buildPublicUserIdentity(item);
 }
 
 function normalizeUsersResponse(response: unknown): SocialProfile[] {

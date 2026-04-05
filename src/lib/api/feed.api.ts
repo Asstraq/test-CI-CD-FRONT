@@ -1,11 +1,11 @@
 import { api } from '@/lib/api/http';
+import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
 import type {
   FeedComment,
   FeedEntry,
   FeedMediaKind,
   FeedShare,
   FeedSharedContent,
-  FeedUser,
 } from '@/type/feed';
 
 type ApiFeedUser = {
@@ -108,42 +108,12 @@ function isCommentActivityType(activityType: string) {
   return activityType.includes('COMMENT');
 }
 
-function buildFeedUser(
-  user?: ApiFeedUser | null,
-  fallbackId?: string,
-): FeedUser {
-  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
-    .filter(Boolean)
-    .join(' ');
-  const name =
-    fullName ||
-    user?.nom?.trim() ||
-    user?.prenom?.trim() ||
-    user?.pseudo?.trim() ||
-    user?.email?.trim() ||
-    'Utilisateur';
-  const handleBase = user?.pseudo?.trim() || name;
-
-  return {
-    id:
-      (user?.id !== null && user?.id !== undefined ? String(user.id) : '') ||
-      fallbackId ||
-      'unknown-user',
-    email: user?.email?.trim() || '',
-    name,
-    handle: handleBase.startsWith('@')
-      ? handleBase
-      : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl: user?.avatarUrl?.trim() || '',
-  };
-}
-
 function buildComment(comment: ApiFeedComment): FeedComment {
   return {
     id: String(comment.id),
     content: comment.content,
     createdAt: comment.createdAt,
-    author: buildFeedUser(comment.user ?? comment.author),
+    author: buildPublicUserIdentity(comment.user ?? comment.author),
   };
 }
 
@@ -225,12 +195,12 @@ function buildSharedContent(activity: ApiFeedActivity): FeedSharedContent {
 
 function normalizeFeedEntry(activity: ApiFeedActivity): NormalizedFeedEntry {
   const activityType = activity.type.trim().toUpperCase();
-  const author = buildFeedUser(
-    activity.actor,
-    activity.actorId !== null && activity.actorId !== undefined
-      ? String(activity.actorId)
-      : undefined,
-  );
+  const author = buildPublicUserIdentity(activity.actor, {
+    fallbackId:
+      activity.actorId !== null && activity.actorId !== undefined
+        ? String(activity.actorId)
+        : undefined,
+  });
   const initialComments = collectComments(activity);
   const review = activity.review;
 
