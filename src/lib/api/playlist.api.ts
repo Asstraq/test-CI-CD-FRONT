@@ -1,4 +1,8 @@
 import { api } from '@/lib/api/http';
+import {
+  buildPublicUserIdentity,
+  type PublicUserIdentity,
+} from '@/lib/user/buildPublicUser';
 import type {
   AddTrackToPlaylistRequest,
   CreatePlaylistRequest,
@@ -8,6 +12,11 @@ import type {
 } from '@/type/playlist';
 
 type PlaylistsResponse = {
+  lists: Playlist[];
+};
+
+type UserPlaylistsResponse = {
+  user: PublicUserIdentity | null;
   lists: Playlist[];
 };
 
@@ -57,25 +66,40 @@ function normalizeTrack(entry: unknown): Track | null {
   const item = asRecord(entry);
   if (!item) return null;
 
-  const album = asRecord(item.album);
-  const artists = asArray(item.artists)
+  const media = asRecord(item.media) ?? item;
+  const album = asRecord(media.album);
+  const artists = asArray(media.artists)
     .map((artist) => asRecord(artist))
     .filter((artist): artist is UnknownRecord => Boolean(artist))
     .map((artist) => ({ name: readString(artist.name) ?? 'Artiste inconnu' }));
 
+  const artistName = readString(media.artist);
+  const normalizedArtists =
+    artists.length > 0
+      ? artists
+      : artistName
+        ? [{ name: artistName }]
+        : undefined;
+
   return {
-    id: readId(item.id, item.spotifyId) ?? '',
-    spotifyId: readString(item.spotifyId),
-    name: readString(item.name, item.title) ?? 'Titre inconnu',
-    album: album
-      ? {
-          id: readId(album.id),
-          name: readString(album.name, album.title),
-          image:
-            readString(album.image, album.imageUrl, album.coverUrl) ?? null,
-        }
-      : undefined,
-    artists,
+    id: readId(media.id, media.spotifyId) ?? '',
+    spotifyId: readString(media.spotifyId),
+    name: readString(media.name, media.title) ?? 'Titre inconnu',
+    album:
+      album || readString(media.imageUrl)
+        ? {
+            id: readId(album?.id),
+            name: readString(album?.name, album?.title),
+            image:
+              readString(
+                album?.image,
+                album?.imageUrl,
+                album?.coverUrl,
+                media.imageUrl,
+              ) ?? null,
+          }
+        : undefined,
+    artists: normalizedArtists,
   };
 }
 
@@ -84,6 +108,10 @@ function normalizePlaylist(entry: unknown): Playlist | null {
   if (!source) return null;
 
   const item = asRecord(source.list) ?? source;
+  const trackEntries =
+    asArray(item.tracks).length > 0
+      ? asArray(item.tracks)
+      : asArray(item.items);
 
   const owner =
     asRecord(item.owner) ?? asRecord(item.user) ?? asRecord(item.author);
@@ -109,7 +137,7 @@ function normalizePlaylist(entry: unknown): Playlist | null {
       item.public,
       item.is_private === true ? 'PRIVATE' : undefined,
     ),
-    tracks: asArray(item.tracks)
+    tracks: trackEntries
       .map(normalizeTrack)
       .filter((track): track is Track => Boolean(track?.id)),
   };
@@ -145,6 +173,21 @@ export async function getUserPlaylists(): Promise<PlaylistsResponse> {
     method: 'GET',
   });
   return { lists: normalizePlaylistsResponse(response) };
+}
+
+export async function getUserPublicPlaylists(
+  userId: string,
+): Promise<UserPlaylistsResponse> {
+  const response = await api<unknown>(`/users/${userId}/playlists`, {
+    method: 'GET',
+    auth: false,
+  });
+  const root = asRecord(response);
+
+  return {
+    user: root?.user ? buildPublicUserIdentity(asRecord(root.user)) : null,
+    lists: normalizePlaylistsResponse(response),
+  };
 }
 
 export async function getPlaylistById(id: string): Promise<Playlist> {

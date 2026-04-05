@@ -47,6 +47,9 @@ export default function PublicProfilePage() {
   const [followers, setFollowers] = useState<SocialProfile[]>([]);
   const [following, setFollowing] = useState<SocialProfile[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [remoteProfile, setRemoteProfile] = useState<SocialProfile | null>(
+    null,
+  );
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(
     null,
   );
@@ -143,10 +146,15 @@ export default function PublicProfilePage() {
   }, [currentUser?.user.id, userId]);
 
   const profile = useMemo(() => {
-    const name = searchParams.get('name') ?? 'Utilisateur';
-    const email = searchParams.get('email') ?? '';
-    const avatarUrl = searchParams.get('avatarUrl') ?? '';
-    const handle = searchParams.get('handle') ?? buildHandle(name, userId);
+    const name =
+      remoteProfile?.name ?? searchParams.get('name') ?? 'Utilisateur';
+    const email = remoteProfile?.email ?? searchParams.get('email') ?? '';
+    const avatarUrl =
+      remoteProfile?.avatarUrl ?? searchParams.get('avatarUrl') ?? '';
+    const handle =
+      remoteProfile?.handle ??
+      searchParams.get('handle') ??
+      buildHandle(name, userId);
 
     return {
       id: userId,
@@ -155,7 +163,14 @@ export default function PublicProfilePage() {
       avatarUrl,
       handle,
     };
-  }, [searchParams, userId]);
+  }, [
+    remoteProfile?.avatarUrl,
+    remoteProfile?.email,
+    remoteProfile?.handle,
+    remoteProfile?.name,
+    searchParams,
+    userId,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -165,46 +180,13 @@ export default function PublicProfilePage() {
 
       try {
         setPlaylistsLoading(true);
-        const queries = [
-          ...new Set([profile.name, profile.handle.replace(/^@/, '')]),
-        ]
-          .map((value) => value.trim())
-          .filter(Boolean);
-
-        const results = (
-          await Promise.all(
-            queries.map(async (query) => {
-              try {
-                return await PlaylistAPI.searchPublicLists(query);
-              } catch {
-                return [];
-              }
-            }),
-          )
-        ).flat();
+        const response = await PlaylistAPI.getUserPublicPlaylists(userId);
 
         if (!active) return;
 
-        const filtered = [
-          ...new Map(
-            results
-              .filter((playlist) => {
-                if (!playlist.id) return false;
-                if (playlist.ownerId && String(playlist.ownerId) === userId) {
-                  return true;
-                }
-                return (
-                  Boolean(playlist.ownerName) &&
-                  playlist.ownerName?.trim().toLowerCase() ===
-                    profile.name.trim().toLowerCase()
-                );
-              })
-              .map((playlist) => [playlist.id, playlist]),
-          ).values(),
-        ];
-
-        setPlaylists(filtered);
-        setSelectedPlaylistId((prev) => prev ?? filtered[0]?.id ?? null);
+        setRemoteProfile(response.user);
+        setPlaylists(response.lists);
+        setSelectedPlaylistId((prev) => prev ?? response.lists[0]?.id ?? null);
       } finally {
         if (active) setPlaylistsLoading(false);
       }
@@ -215,7 +197,7 @@ export default function PublicProfilePage() {
     return () => {
       active = false;
     };
-  }, [currentUser?.user.id, profile.handle, profile.name, userId]);
+  }, [currentUser?.user.id, userId]);
 
   useEffect(() => {
     let active = true;
