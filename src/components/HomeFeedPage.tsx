@@ -15,7 +15,7 @@ import {
   type SocialProfile,
 } from '@/lib/api/social.api';
 import {
-  searchSpotifyMedia,
+  searchSpotifyCatalog,
   type MediaSearchResult,
 } from '@/lib/api/spotify.api';
 import { getToken } from '@/lib/auth/token';
@@ -405,7 +405,7 @@ export default function HomeFeedPage() {
       setSearchState((prev) => ({ ...prev, loading: true, error: '' }));
 
       try {
-        const results = await searchSpotifyMedia(form.query, 'ALBUM');
+        const results = await searchSpotifyCatalog(form.query);
         if (!active) return;
         setSearchState({ loading: false, error: '', results });
       } catch (error) {
@@ -528,7 +528,7 @@ export default function HomeFeedPage() {
     setSubmitting(true);
 
     try {
-      await upsertReview('ALBUM', form.selected.spotifyId, {
+      await upsertReview(form.selected.kind, form.selected.spotifyId, {
         content: form.content.trim(),
         rating: form.rating,
         containsSpoilers: form.containsSpoilers,
@@ -592,7 +592,7 @@ export default function HomeFeedPage() {
               </Typography>
               <Typography sx={{ color: '#4a5568' }}>
                 {canAccessFeed
-                  ? 'Le partage du feed principal est limite aux albums. Chaque publication cree une review album qui remonte ensuite dans le feed social.'
+                  ? 'Partagez des albums, sons et artistes Spotify dans le feed principal. Chaque publication cree une review qui remonte ensuite dans le feed social.'
                   : 'Le backend expose le feed uniquement pour un utilisateur authentifie. Connectez-vous pour publier et consulter les partages de votre reseau.'}
               </Typography>
               {!canAccessFeed ? (
@@ -631,12 +631,12 @@ export default function HomeFeedPage() {
                 >
                   <Stack spacing={2}>
                     <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
-                      Nouveau partage d&apos;album
+                      Nouveau partage
                     </Typography>
 
                     <TextField
                       fullWidth
-                      label="Rechercher un album"
+                      label="Rechercher un album, son ou artiste"
                       value={form.query}
                       onChange={(event) =>
                         setForm((prev) => ({
@@ -648,7 +648,7 @@ export default function HomeFeedPage() {
                               : null,
                         }))
                       }
-                      placeholder="Currents, Blonde, Discovery..."
+                      placeholder="Currents, Mignon Mignon, FKJ..."
                       InputProps={{
                         endAdornment: searchState.loading ? (
                           <CircularProgress size={18} />

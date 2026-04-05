@@ -321,10 +321,7 @@ export async function getFeed(limit = 40): Promise<FeedEntry[]> {
   return [...groupedEntries.values()]
     .map(buildFeedFromGroup)
     .filter((entry): entry is FeedEntry => entry !== null)
-    .sort((a, b) => {
-      const scoreA = a.share.likes + a.share.comments * 2;
-      const scoreB = b.share.likes + b.share.comments * 2;
-      if (scoreB !== scoreA) return scoreB - scoreA;
-      return +new Date(b.share.createdAt) - +new Date(a.share.createdAt);
-    });
+    .sort(
+      (a, b) => +new Date(b.share.createdAt) - +new Date(a.share.createdAt),
+    );
 }

@@ -24,29 +24,36 @@ type ReviewCommentDto = {
   id: number | string;
   content: string;
   createdAt: string;
-  user: ApiFeedUser;
+  user?: ApiFeedUser | null;
+};
+
+type CreateReviewCommentResponse = {
+  comment?: ReviewCommentDto | null;
 };
 
 type ReviewCommentsResponse = {
   comments: ReviewCommentDto[];
 };
 
-function buildFeedUser(user: ApiFeedUser): FeedUser {
-  const fullName = [user.prenom?.trim(), user.nom?.trim()]
+function buildFeedUser(user?: ApiFeedUser | null): FeedUser {
+  const fullName = [user?.prenom?.trim(), user?.nom?.trim()]
     .filter(Boolean)
     .join(' ');
   const name =
-    fullName || user.nom?.trim() || user.prenom?.trim() || 'Utilisateur';
-  const handleBase = user.pseudo?.trim() || name;
+    fullName || user?.nom?.trim() || user?.prenom?.trim() || 'Utilisateur';
+  const handleBase = user?.pseudo?.trim() || name;
 
   return {
-    id: String(user.id),
-    email: user.email?.trim() || '',
+    id:
+      user?.id !== null && user?.id !== undefined
+        ? String(user.id)
+        : 'unknown-user',
+    email: user?.email?.trim() || '',
     name,
     handle: handleBase.startsWith('@')
       ? handleBase
       : `@${handleBase.replace(/\s+/g, '').toLowerCase()}`,
-    avatarUrl: user.avatarUrl?.trim() || '',
+    avatarUrl: user?.avatarUrl?.trim() || '',
   };
 }
 
@@ -115,7 +122,7 @@ export async function getReviewComments(
 }
 
 export async function createReviewComment(reviewId: string, content: string) {
-  const response = await api<ReviewCommentDto>(
+  const response = await api<CreateReviewCommentResponse | ReviewCommentDto>(
     `/reviews/${reviewId}/comments`,
     {
       method: 'POST',
@@ -123,5 +130,7 @@ export async function createReviewComment(reviewId: string, content: string) {
     },
   );
 
-  return buildFeedComment(response);
+  const comment = 'comment' in response ? response.comment : response;
+
+  return comment ? buildFeedComment(comment) : null;
 }

@@ -24,6 +24,14 @@ export type TrackPreviewResult = {
   imageUrl?: string;
 };
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' ? (value as UnknownRecord) : null;
 }
@@ -190,6 +198,37 @@ function normalizeArtist(entry: unknown): MediaSearchResult | null {
   };
 }
 
+function scoreSearchResult(query: string, result: MediaSearchResult): number {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return 0;
+
+  const title = normalizeSearchText(result.title);
+  const subtitle = normalizeSearchText(result.subtitle);
+  const titleWords = title.split(/\s+/).filter(Boolean);
+  const queryWords = normalizedQuery.split(/\s+/).filter(Boolean);
+
+  let score = 0;
+
+  if (title === normalizedQuery) score += 1_000;
+  if (title.startsWith(normalizedQuery)) score += 700;
+  if (title.includes(normalizedQuery)) score += 450;
+  if (subtitle.includes(normalizedQuery)) score += 180;
+
+  queryWords.forEach((word) => {
+    if (titleWords.some((titleWord) => titleWord.startsWith(word))) {
+      score += 90;
+    } else if (title.includes(word)) {
+      score += 50;
+    }
+
+    if (subtitle.includes(word)) {
+      score += 20;
+    }
+  });
+
+  return score;
+}
+
 export async function searchSpotifyMedia(
   query: string,
   kind: FeedMediaKind,
@@ -217,6 +256,30 @@ export async function searchSpotifyMedia(
   return items
     .map(normalize)
     .filter((entry): entry is MediaSearchResult => Boolean(entry));
+}
+
+export async function searchSpotifyCatalog(
+  query: string,
+  limitPerKind = 4,
+): Promise<MediaSearchResult[]> {
+  const [tracks, albums, artists] = await Promise.all([
+    searchSpotifyMedia(query, 'TRACK', limitPerKind),
+    searchSpotifyMedia(query, 'ALBUM', limitPerKind),
+    searchSpotifyMedia(query, 'ARTIST', limitPerKind),
+  ]);
+
+  return [...tracks, ...albums, ...artists]
+    .sort((left, right) => {
+      const scoreDiff =
+        scoreSearchResult(query, right) - scoreSearchResult(query, left);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      const titleLengthDiff = left.title.length - right.title.length;
+      if (titleLengthDiff !== 0) return titleLengthDiff;
+
+      return left.title.localeCompare(right.title);
+    })
+    .slice(0, 6);
 }
 
 export async function getTrackPreviews(
