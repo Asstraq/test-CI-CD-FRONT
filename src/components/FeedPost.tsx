@@ -42,6 +42,7 @@ import {
   useTheme,
 } from '@mui/material';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 type FeedPostProps = {
@@ -102,6 +103,7 @@ function getSharedIcon(kind: FeedShare['shared']['kind']) {
 }
 
 export default function FeedPost({ share, author }: FeedPostProps) {
+  const searchParams = useSearchParams();
   const { user } = useUserSession();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -131,6 +133,7 @@ export default function FeedPost({ share, author }: FeedPostProps) {
   );
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [commentsAutoOpened, setCommentsAutoOpened] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportSuccess, setReportSuccess] = useState('');
 
@@ -179,6 +182,7 @@ export default function FeedPost({ share, author }: FeedPostProps) {
 
   useEffect(() => {
     setLikesDialogOpen(false);
+    setCommentsAutoOpened(false);
   }, [share.id]);
 
   useEffect(() => {
@@ -193,6 +197,34 @@ export default function FeedPost({ share, author }: FeedPostProps) {
 
     void loadComments();
   }, [commentsLoaded, commentsLoading, loadComments, reviewId, share.comments]);
+
+  useEffect(() => {
+    const targetReviewId = searchParams.get('reviewId');
+    const shouldOpenComments = searchParams.get('openComments') === '1';
+
+    if (
+      !shouldOpenComments ||
+      commentsAutoOpened ||
+      typeof reviewId !== 'number' ||
+      targetReviewId !== String(reviewId)
+    ) {
+      return;
+    }
+
+    setCommentsVisible(true);
+    setCommentsAutoOpened(true);
+
+    if (!commentsLoaded && !commentsLoading) {
+      void loadComments();
+    }
+  }, [
+    commentsAutoOpened,
+    commentsLoaded,
+    commentsLoading,
+    loadComments,
+    reviewId,
+    searchParams,
+  ]);
 
   const handleToggleComments = async () => {
     const nextVisible = !commentsVisible;
@@ -401,6 +433,11 @@ export default function FeedPost({ share, author }: FeedPostProps) {
 
   return (
     <Paper
+      id={
+        typeof reviewId === 'number'
+          ? `feed-review-${reviewId}`
+          : `feed-share-${share.id}`
+      }
       elevation={0}
       sx={{
         p: { xs: 2, md: 3 },

@@ -27,6 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 
 function getDateLabel(date: string): string {
@@ -86,10 +87,13 @@ function getNotificationSubtitle(notification: NotificationItem): string {
 }
 
 export default function NotificationsMenu() {
+  const router = useRouter();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [error, setError] = useState('');
 
@@ -114,6 +118,7 @@ export default function NotificationsMenu() {
       const response = await listNotifications(6);
       setNotifications(response.notifications);
       setUnreadCount(response.unreadNotificationsCount);
+      setNextCursor(response.nextCursor);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -158,6 +163,63 @@ export default function NotificationsMenu() {
           ? markError.message
           : 'Impossible de marquer la notification comme lue.',
       );
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || nextCursor === null) return;
+
+    setLoadingMore(true);
+    setError('');
+
+    try {
+      const response = await listNotifications(6, nextCursor);
+      setNotifications((prev) => {
+        const existingIds = new Set(
+          prev.map((notification) => notification.id),
+        );
+        const appended = response.notifications.filter(
+          (notification) => !existingIds.has(notification.id),
+        );
+        return [...prev, ...appended];
+      });
+      setNextCursor(response.nextCursor);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Impossible de charger plus de notifications.',
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleNotificationClick = async (notification: NotificationItem) => {
+    await handleReadNotification(notification.id);
+    handleClose();
+
+    if (
+      (notification.type === 'REVIEW_LIKED' ||
+        notification.type === 'REVIEW_COMMENTED') &&
+      notification.reviewId
+    ) {
+      router.push(`/?reviewId=${notification.reviewId}&openComments=1`);
+      return;
+    }
+
+    if (notification.type === 'FOLLOW_REQUEST') {
+      router.push('/profile?section=requests');
+      return;
+    }
+
+    if (
+      notification.type === 'FOLLOW' ||
+      notification.type === 'FOLLOW_REQUEST_ACCEPTED'
+    ) {
+      const profileHref = buildProfileHref(notification.actor);
+      router.push(profileHref || '/profile');
+      return;
     }
   };
 
@@ -223,12 +285,13 @@ export default function NotificationsMenu() {
               mt: 1.25,
               width: 420,
               maxWidth: 'calc(100vw - 24px)',
+              maxHeight: 'min(70vh, 640px)',
               borderRadius: 3,
               border: '1px solid rgba(15,23,42,0.08)',
               overflow: 'hidden',
             }}
           >
-            <Stack spacing={0}>
+            <Stack spacing={0} sx={{ maxHeight: 'inherit' }}>
               <Stack
                 direction="row"
                 alignItems="center"
@@ -268,101 +331,128 @@ export default function NotificationsMenu() {
 
               {!loading && !error ? (
                 notifications.length > 0 ? (
-                  <List disablePadding>
-                    {notifications.map((notification, index) => {
-                      const profileHref = buildProfileHref(notification.actor);
+                  <>
+                    <Box sx={{ overflowY: 'auto', maxHeight: '48vh' }}>
+                      <List disablePadding>
+                        {notifications.map((notification, index) => {
+                          const profileHref = buildProfileHref(
+                            notification.actor,
+                          );
 
-                      return (
-                        <Box key={notification.id}>
-                          <ListItemButton
-                            onClick={() => {
-                              void handleReadNotification(notification.id);
-                            }}
-                            sx={{
-                              alignItems: 'flex-start',
-                              py: 1.5,
-                              px: 2,
-                              bgcolor: notification.readAt
-                                ? 'transparent'
-                                : 'rgba(249,115,22,0.08)',
-                            }}
-                          >
-                            <ListItemAvatar>
-                              {profileHref ? (
-                                <Link href={profileHref}>
-                                  <Avatar
-                                    src={
-                                      notification.actor.avatarUrl || undefined
-                                    }
-                                  >
-                                    {notification.actor.name
-                                      .charAt(0)
-                                      .toUpperCase()}
-                                  </Avatar>
-                                </Link>
-                              ) : (
-                                <Avatar
-                                  src={
-                                    notification.actor.avatarUrl || undefined
+                          return (
+                            <Box key={notification.id}>
+                              <ListItemButton
+                                onClick={() => {
+                                  void handleNotificationClick(notification);
+                                }}
+                                sx={{
+                                  alignItems: 'flex-start',
+                                  py: 1.5,
+                                  px: 2,
+                                  bgcolor: notification.readAt
+                                    ? 'transparent'
+                                    : 'rgba(249,115,22,0.08)',
+                                }}
+                              >
+                                <ListItemAvatar>
+                                  {profileHref ? (
+                                    <Link href={profileHref}>
+                                      <Avatar
+                                        src={
+                                          notification.actor.avatarUrl ||
+                                          undefined
+                                        }
+                                      >
+                                        {notification.actor.name
+                                          .charAt(0)
+                                          .toUpperCase()}
+                                      </Avatar>
+                                    </Link>
+                                  ) : (
+                                    <Avatar
+                                      src={
+                                        notification.actor.avatarUrl ||
+                                        undefined
+                                      }
+                                    >
+                                      {notification.actor.name
+                                        .charAt(0)
+                                        .toUpperCase()}
+                                    </Avatar>
+                                  )}
+                                </ListItemAvatar>
+                                <ListItemText
+                                  primary={
+                                    <Stack
+                                      direction="row"
+                                      spacing={1}
+                                      alignItems="center"
+                                      justifyContent="space-between"
+                                    >
+                                      <Typography
+                                        sx={{
+                                          fontWeight: notification.readAt
+                                            ? 600
+                                            : 700,
+                                          color: '#111827',
+                                        }}
+                                      >
+                                        {getNotificationTitle(notification)}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: '#64748b',
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        {getDateLabel(notification.createdAt)}
+                                      </Typography>
+                                    </Stack>
                                   }
-                                >
-                                  {notification.actor.name
-                                    .charAt(0)
-                                    .toUpperCase()}
-                                </Avatar>
-                              )}
-                            </ListItemAvatar>
-                            <ListItemText
-                              primary={
-                                <Stack
-                                  direction="row"
-                                  spacing={1}
-                                  alignItems="center"
-                                  justifyContent="space-between"
-                                >
-                                  <Typography
-                                    sx={{
-                                      fontWeight: notification.readAt
-                                        ? 600
-                                        : 700,
-                                      color: '#111827',
-                                    }}
-                                  >
-                                    {getNotificationTitle(notification)}
-                                  </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ color: '#64748b', flexShrink: 0 }}
-                                  >
-                                    {getDateLabel(notification.createdAt)}
-                                  </Typography>
-                                </Stack>
-                              }
-                              secondary={
-                                <Stack spacing={0.25} sx={{ mt: 0.25 }}>
-                                  <Typography
-                                    variant="body2"
-                                    sx={{ color: '#475569' }}
-                                  >
-                                    {getNotificationSubtitle(notification)}
-                                  </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ color: '#94a3b8' }}
-                                  >
-                                    {notification.actor.handle}
-                                  </Typography>
-                                </Stack>
-                              }
-                            />
-                          </ListItemButton>
-                          {index < notifications.length - 1 ? (
-                            <Divider />
-                          ) : null}
+                                  secondary={
+                                    <Stack spacing={0.25} sx={{ mt: 0.25 }}>
+                                      <Typography
+                                        variant="body2"
+                                        sx={{ color: '#475569' }}
+                                      >
+                                        {getNotificationSubtitle(notification)}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{ color: '#94a3b8' }}
+                                      >
+                                        {notification.actor.handle}
+                                      </Typography>
+                                    </Stack>
+                                  }
+                                />
+                              </ListItemButton>
+                              {index < notifications.length - 1 ? (
+                                <Divider />
+                              ) : null}
+                            </Box>
+                          );
+                        })}
+                      </List>
+                    </Box>
+
+                    {nextCursor !== null ? (
+                      <>
+                        <Divider />
+                        <Box sx={{ p: 1.5 }}>
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            onClick={() => void handleLoadMore()}
+                            disabled={loadingMore}
+                          >
+                            {loadingMore ? 'Chargement...' : 'Afficher plus'}
+                          </Button>
                         </Box>
-                      );
-                    })}
-                  </List>
+                      </>
+                    ) : null}
+                  </>
                 ) : (
                   <Typography sx={{ px: 2, py: 4, color: '#64748b' }}>
                     Aucune notification pour le moment.
