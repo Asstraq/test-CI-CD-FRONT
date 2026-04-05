@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/http';
+import { buildReview } from '@/lib/review/buildPublicReview';
 import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
 import type {
   FeedComment,
@@ -202,20 +203,21 @@ function normalizeFeedEntry(activity: ApiFeedActivity): NormalizedFeedEntry {
         : undefined,
   });
   const initialComments = collectComments(activity);
-  const review = activity.review;
+  const review = buildReview(activity.review);
 
   const share: FeedShare = {
     id: String(activity.id),
-    reviewId: review?.id ?? activity.reviewId ?? undefined,
+    reviewId: review.id > 0 ? review.id : (activity.reviewId ?? undefined),
     authorId: author.id,
-    visibility: review?.visibility === 'FOLLOWERS' ? 'FOLLOWERS' : 'PUBLIC',
-    content: review?.content?.trim() || '',
-    createdAt: review?.createdAt || activity.createdAt,
+    visibility:
+      activity.review?.visibility === 'FOLLOWERS' ? 'FOLLOWERS' : 'PUBLIC',
+    content: review.content?.trim() || '',
+    createdAt: review.createdAt || activity.createdAt,
     shared: buildSharedContent(activity),
-    rating: review?.rating ?? 0,
-    likes: review?.counts?.likes ?? 0,
-    comments: Math.max(review?.counts?.comments ?? 0, initialComments.length),
-    likedByMe: review?.likedByMe === true,
+    rating: review.rating ?? 0,
+    likes: review.likesCount ?? 0,
+    comments: Math.max(review.commentsCount ?? 0, initialComments.length),
+    likedByMe: review.likedByMe === true,
     initialComments,
   };
 

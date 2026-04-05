@@ -1,5 +1,9 @@
 import { api } from '@/lib/api/http';
 import { buildPublicUserIdentity } from '@/lib/user/buildPublicUser';
+import {
+  buildReviewComment,
+  buildReviewLike,
+} from '@/lib/review/buildPublicReview';
 import type { FeedComment, FeedLike } from '@/type/feed';
 
 type ApiFeedUser = {
@@ -37,18 +41,22 @@ type ReviewCommentsResponse = {
 };
 
 function buildFeedComment(comment: ReviewCommentDto): FeedComment {
+  const normalized = buildReviewComment(comment);
+
   return {
-    id: String(comment.id),
-    content: comment.content,
-    createdAt: comment.createdAt,
-    author: buildPublicUserIdentity(comment.user),
+    id: String(normalized.id),
+    content: normalized.content,
+    createdAt: normalized.createdAt ?? new Date().toISOString(),
+    author: buildPublicUserIdentity(normalized.user),
   };
 }
 
 function buildFeedLike(like: ReviewLikeDto): FeedLike {
+  const normalized = buildReviewLike(like);
+
   return {
-    createdAt: like.createdAt,
-    user: buildPublicUserIdentity(like.user),
+    createdAt: normalized.createdAt ?? new Date().toISOString(),
+    user: buildPublicUserIdentity(normalized.user),
   };
 }
 
