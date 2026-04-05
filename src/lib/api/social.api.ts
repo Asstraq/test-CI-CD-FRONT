@@ -11,6 +11,14 @@ export type SocialProfile = {
   avatarUrl: string;
 };
 
+export type SocialFollowRequest = {
+  id: string;
+  status: string;
+  createdAt: string;
+  requester?: SocialProfile | null;
+  target?: SocialProfile | null;
+};
+
 function asRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === 'object' ? (value as UnknownRecord) : null;
 }
@@ -45,6 +53,55 @@ function normalizeUsersResponse(response: unknown): SocialProfile[] {
     .filter((user): user is SocialProfile => Boolean(user?.id));
 }
 
+function normalizeFollowRequest(entry: unknown): SocialFollowRequest | null {
+  const item = asRecord(entry);
+  if (!item) return null;
+
+  const requester = normalizeUser(item.requester);
+  const target = normalizeUser(item.target);
+  const id = item.id;
+
+  if (
+    !(
+      (typeof id === 'number' && Number.isFinite(id)) ||
+      (typeof id === 'string' && id.trim())
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    id: String(id),
+    status:
+      typeof item.status === 'string' && item.status.trim()
+        ? item.status.trim()
+        : 'PENDING',
+    createdAt:
+      typeof item.createdAt === 'string' && item.createdAt.trim()
+        ? item.createdAt
+        : new Date().toISOString(),
+    requester,
+    target,
+  };
+}
+
+function normalizeFollowRequestsResponse(
+  response: unknown,
+): SocialFollowRequest[] {
+  const root = asRecord(response);
+  const items = Array.isArray(response)
+    ? response
+    : asArray(root?.requests).length > 0
+      ? asArray(root?.requests)
+      : asArray(root?.items).length > 0
+        ? asArray(root?.items)
+        : asArray(root?.data);
+
+  return items
+    .map(normalizeFollowRequest)
+    .filter((request): request is SocialFollowRequest => Boolean(request?.id));
+}
+
 export async function searchUsers(query: string): Promise<SocialProfile[]> {
   const attempts = [
     `/search/users?q=${encodeURIComponent(query)}`,
@@ -75,6 +132,25 @@ export async function getMyFollowing(): Promise<SocialProfile[]> {
 export async function getMyFollowers(): Promise<SocialProfile[]> {
   const response = await api<unknown>('/social/me/followers');
   return normalizeUsersResponse(response);
+}
+
+export async function getIncomingFollowRequests(): Promise<
+  SocialFollowRequest[]
+> {
+  const response = await api<unknown>('/social/requests/incoming');
+  return normalizeFollowRequestsResponse(response);
+}
+
+export function acceptFollowRequest(userId: string) {
+  return api<{ accepted?: boolean }>(`/social/requests/${userId}/accept`, {
+    method: 'POST',
+  });
+}
+
+export function rejectFollowRequest(userId: string) {
+  return api<{ rejected?: boolean }>(`/social/requests/${userId}/reject`, {
+    method: 'POST',
+  });
 }
 
 export async function getUserFollowing(
