@@ -11,6 +11,9 @@ export type User = {
   avatarUrl?: string;
   bio?: string;
   isProfilePublic?: boolean;
+  isPrenomPublic?: boolean;
+  isEmailPublic?: boolean;
+  isBioPublic?: boolean;
   displayColor?: string;
   theme?: string;
 };
@@ -28,6 +31,9 @@ export type UpdateProfilePayload = {
   avatarUrl?: string | null;
   bio?: string;
   isProfilePublic?: boolean;
+  isPrenomPublic?: boolean;
+  isEmailPublic?: boolean;
+  isBioPublic?: boolean;
   displayColor?: string;
   theme?: string;
 };
