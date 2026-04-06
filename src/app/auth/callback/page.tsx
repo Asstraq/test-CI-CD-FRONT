@@ -1,12 +1,17 @@
 'use client';
 
-import { completeGoogleAuth, me, updateProfile } from '@/lib/api/auth.api';
+import {
+  completeGoogleAuth,
+  completeMicrosoftAuth,
+  me,
+  updateProfile,
+} from '@/lib/api/auth.api';
 import { clearToken, setToken } from '@/lib/auth/token';
 import { useUserSession } from '@/lib/auth/userSession';
 import type { UpdateProfilePayload, User } from '@/type/user';
 import { Alert, CircularProgress, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const Page = styled('div')({
@@ -44,20 +49,20 @@ const Message = styled(Typography)({
   color: '#6b7280',
 });
 
-type GoogleIdentity = {
+type OAuthIdentity = {
   id: string;
   displayName: string;
-  email: string;
+  email: string | null;
   avatarUrl: string | null;
 };
 
-function buildGoogleProfilePatch(
-  google: GoogleIdentity | null,
+function buildOAuthProfilePatch(
+  identity: OAuthIdentity | null,
   user: User,
 ): UpdateProfilePayload | null {
-  if (!google) return null;
+  if (!identity) return null;
 
-  const displayName = google.displayName.trim();
+  const displayName = identity.displayName.trim();
   const nameParts = displayName.split(/\s+/).filter(Boolean);
   const nextPrenom =
     !user.prenom?.trim() && nameParts.length > 1 ? nameParts[0] : undefined;
@@ -70,8 +75,8 @@ function buildGoogleProfilePatch(
   const patch: UpdateProfilePayload = {
     nom: nextNom,
     prenom: nextPrenom,
-    email: !user.email?.trim() ? google.email : undefined,
-    avatarUrl: !user.avatarUrl?.trim() ? google.avatarUrl : undefined,
+    email: !user.email?.trim() ? (identity.email ?? undefined) : undefined,
+    avatarUrl: !user.avatarUrl?.trim() ? identity.avatarUrl : undefined,
   };
 
   return Object.values(patch).some((value) => value !== undefined)
@@ -80,6 +85,7 @@ function buildGoogleProfilePatch(
 }
 
 export default function AuthCallbackPage() {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser, clearUser } = useUserSession();
@@ -115,14 +121,25 @@ export default function AuthCallbackPage() {
       }
 
       try {
-        const googleAuth = token
+        const isMicrosoftCallback = pathname.includes('/auth/microsoft/');
+        const oauthResult = token
           ? null
-          : await completeGoogleAuth(code!, state!);
-        const nextToken = token ?? googleAuth!.token;
+          : isMicrosoftCallback
+            ? await completeMicrosoftAuth(code!, state!)
+            : await completeGoogleAuth(code!, state!);
+        const oauthIdentity = oauthResult
+          ? 'google' in oauthResult
+            ? oauthResult.google
+            : {
+                ...oauthResult.microsoft,
+                avatarUrl: null,
+              }
+          : null;
+        const nextToken = token ?? oauthResult!.token;
         setToken(nextToken);
         const response = await me();
         let user = 'user' in response ? response.user : response;
-        const patch = buildGoogleProfilePatch(googleAuth?.google ?? null, user);
+        const patch = buildOAuthProfilePatch(oauthIdentity, user);
 
         if (patch) {
           const updatedResponse = await updateProfile(patch);
@@ -143,7 +160,7 @@ export default function AuthCallbackPage() {
         setError(
           cause instanceof Error
             ? cause.message
-            : 'Connexion Google impossible.',
+            : 'Connexion OAuth impossible.',
         );
         router.replace('/auth');
       }
@@ -154,7 +171,7 @@ export default function AuthCallbackPage() {
     return () => {
       active = false;
     };
-  }, [clearUser, router, searchParams, setUser]);
+  }, [clearUser, pathname, router, searchParams, setUser]);
 
   return (
     <Page>
