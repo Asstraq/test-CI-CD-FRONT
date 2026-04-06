@@ -2,7 +2,13 @@
 
 import type { User } from '@/type/user';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 
 const STORAGE_KEY = 'user';
 
@@ -37,7 +43,7 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
     readStoredUser(),
   );
 
-  const setUser = (nextUser: SessionUser | null) => {
+  const setUser = useCallback((nextUser: SessionUser | null) => {
     setUserState(nextUser);
     if (typeof window === 'undefined') return;
     if (nextUser) {
@@ -45,12 +51,16 @@ export function UserSessionProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
-  };
+  }, []);
 
-  const clearUser = () => setUser(null);
+  const clearUser = useCallback(() => setUser(null), [setUser]);
+  const value = useMemo(
+    () => ({ user, setUser, clearUser }),
+    [clearUser, setUser, user],
+  );
 
   return (
-    <UserSessionContext.Provider value={{ user, setUser, clearUser }}>
+    <UserSessionContext.Provider value={value}>
       {children}
     </UserSessionContext.Provider>
   );
