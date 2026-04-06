@@ -33,13 +33,34 @@ type GoogleCallbackResponse = {
   };
 };
 
+type MicrosoftCallbackResponse = {
+  status: 'ok';
+  token: string;
+  microsoft: {
+    id: string;
+    displayName: string;
+    email: string | null;
+  };
+};
+
 export function getGoogleAuthUrl() {
   return `${BACKEND_URL}/auth/google`;
+}
+
+export function getMicrosoftAuthUrl() {
+  return `${BACKEND_URL}/auth/microsoft`;
 }
 
 export function completeGoogleAuth(code: string, state: string) {
   const search = new URLSearchParams({ code, state }).toString();
   return api<GoogleCallbackResponse>(`/auth/google/callback?${search}`, {
+    auth: false,
+  });
+}
+
+export function completeMicrosoftAuth(code: string, state: string) {
+  const search = new URLSearchParams({ code, state }).toString();
+  return api<MicrosoftCallbackResponse>(`/auth/microsoft/callback?${search}`, {
     auth: false,
   });
 }
