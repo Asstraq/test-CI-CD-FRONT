@@ -56,6 +56,22 @@ type OAuthIdentity = {
   avatarUrl: string | null;
 };
 
+function splitDisplayName(displayName: string) {
+  const nameParts = displayName.trim().split(/\s+/).filter(Boolean);
+
+  if (nameParts.length <= 1) {
+    return {
+      prenom: undefined,
+      nom: displayName.trim() || undefined,
+    };
+  }
+
+  return {
+    prenom: nameParts[0],
+    nom: nameParts.slice(1).join(' '),
+  };
+}
+
 function buildOAuthProfilePatch(
   identity: OAuthIdentity | null,
   user: User,
@@ -63,14 +79,25 @@ function buildOAuthProfilePatch(
   if (!identity) return null;
 
   const displayName = identity.displayName.trim();
-  const nameParts = displayName.split(/\s+/).filter(Boolean);
+  const parsedName = splitDisplayName(displayName);
+  const normalizedCurrentNom = user.nom?.trim() ?? '';
+  const normalizedCurrentPrenom = user.prenom?.trim() ?? '';
+
+  const shouldSplitExistingFullName =
+    !normalizedCurrentPrenom &&
+    normalizedCurrentNom.length > 0 &&
+    normalizedCurrentNom === displayName &&
+    Boolean(parsedName.prenom) &&
+    Boolean(parsedName.nom);
+
   const nextPrenom =
-    !user.prenom?.trim() && nameParts.length > 1 ? nameParts[0] : undefined;
-  const nextNom = !user.nom?.trim()
-    ? nameParts.length > 1
-      ? nameParts.slice(1).join(' ')
-      : displayName || undefined
-    : undefined;
+    !normalizedCurrentPrenom && parsedName.prenom
+      ? parsedName.prenom
+      : undefined;
+  const nextNom =
+    shouldSplitExistingFullName || !normalizedCurrentNom
+      ? parsedName.nom
+      : undefined;
 
   const patch: UpdateProfilePayload = {
     nom: nextNom,
