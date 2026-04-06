@@ -581,50 +581,6 @@ export default function HomeFeedPage() {
     >
       <Container maxWidth="lg">
         <Stack spacing={3}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: { xs: 3, md: 4 },
-              borderRadius: 4,
-              border: '1px solid rgba(45, 66, 120, 0.12)',
-              backgroundColor: 'rgba(255, 255, 255, 0.88)',
-              backdropFilter: 'blur(6px)',
-            }}
-          >
-            <Stack spacing={1.5}>
-              <Typography
-                variant="overline"
-                letterSpacing={1.4}
-                sx={{ color: '#5a6b7a' }}
-              >
-                Feed SoundBook
-              </Typography>
-              <Typography
-                variant="h4"
-                sx={{ fontWeight: 700, color: '#1a1d24' }}
-              >
-                {canAccessFeed
-                  ? 'Partages de votre reseau'
-                  : 'Connectez-vous pour partager'}
-              </Typography>
-              <Typography sx={{ color: '#4a5568' }}>
-                {canAccessFeed
-                  ? 'Partagez des albums, sons et artistes Spotify dans le feed principal. Chaque publication cree une review qui remonte ensuite dans le feed social.'
-                  : 'Le backend expose le feed uniquement pour un utilisateur authentifie. Connectez-vous pour publier et consulter les partages de votre reseau.'}
-              </Typography>
-              {!canAccessFeed ? (
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                  <Button component={Link} href="/auth" variant="contained">
-                    Se connecter
-                  </Button>
-                  <Button component={Link} href="/auth" variant="outlined">
-                    Creer un compte
-                  </Button>
-                </Stack>
-              ) : null}
-            </Stack>
-          </Paper>
-
           {!canAccessFeed ? (
             <Alert severity="info" sx={{ borderRadius: 3 }}>
               Le systeme de partage du feed principal est reserve aux
@@ -760,9 +716,6 @@ export default function HomeFeedPage() {
                     />
 
                     <Box>
-                      <Typography gutterBottom sx={{ color: '#4f5f7b' }}>
-                        Note optionnelle
-                      </Typography>
                       <Rating
                         value={form.rating}
                         max={5}
@@ -850,12 +803,6 @@ export default function HomeFeedPage() {
                     <Typography sx={{ fontWeight: 700, color: '#1b2130' }}>
                       Aucun partage pour le moment
                     </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ color: '#5c6780', mt: 1 }}
-                    >
-                      Aucun post n est encore disponible dans le feed.
-                    </Typography>
                   </Paper>
                 )}
               </Stack>
@@ -875,14 +822,11 @@ export default function HomeFeedPage() {
                     <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
                       Rechercher un profil
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#62708b' }}>
-                      Nom, prenom ou adresse mail.
-                    </Typography>
                   </Box>
                   <TextField
                     fullWidth
                     size="small"
-                    label="Trouver un utilisateur"
+                    label="Nom, prenom ou adresse mail."
                     value={userSearchQuery}
                     onChange={(event) => setUserSearchQuery(event.target.value)}
                     placeholder="jane@music.dev, Martin, Sarah..."
@@ -985,10 +929,6 @@ export default function HomeFeedPage() {
                   <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
                     Suggestions de profils
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#62708b' }}>
-                    Les profils avec le plus d&apos;abonnements en commun
-                    remontent en premier.
-                  </Typography>
                   {socialError ? (
                     <Alert severity="error">{socialError}</Alert>
                   ) : null}
@@ -1077,9 +1017,8 @@ export default function HomeFeedPage() {
                                   variant="caption"
                                   sx={{ color: '#48607f' }}
                                 >
-                                  {profile.commonFollows > 0
-                                    ? `${profile.commonFollows} follow(s) en commun`
-                                    : 'Suggestion du reseau'}
+                                  {profile.commonFollows > 0 &&
+                                    `${profile.commonFollows} follow(s) en commun`}
                                 </Typography>
                               </Box>
                               <Button

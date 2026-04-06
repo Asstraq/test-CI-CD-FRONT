@@ -1,18 +1,6 @@
 'use client';
 
-import type {
-  ProfileEditorTab,
-  ProfileFormState,
-  ProfileTextField,
-  ProfileVisibilityField,
-} from './profilePage.shared';
 import {
-  THEME_COLOR_PRESETS,
-  dialogContentSx,
-  dialogPaperSx,
-} from './profilePage.shared';
-import {
-  Alert,
   Avatar,
   Box,
   Button,
@@ -31,6 +19,17 @@ import {
   Typography,
 } from '@mui/material';
 import type { ChangeEvent, SyntheticEvent } from 'react';
+import type {
+  ProfileEditorTab,
+  ProfileFormState,
+  ProfileTextField,
+  ProfileVisibilityField,
+} from './profilePage.shared';
+import {
+  THEME_COLOR_PRESETS,
+  dialogContentSx,
+  dialogPaperSx,
+} from './profilePage.shared';
 
 type Props = {
   open: boolean;
@@ -44,7 +43,6 @@ type Props = {
   canRemoveAvatar: boolean;
   avatarInputRef: React.RefObject<HTMLInputElement | null>;
   onClose: () => void;
-  onReset: () => void;
   onSave: () => void | Promise<void>;
   onProfileEditorTabChange: (
     event: SyntheticEvent,
@@ -74,7 +72,6 @@ export default function ProfileEditorDialog({
   canRemoveAvatar,
   avatarInputRef,
   onClose,
-  onReset,
   onSave,
   onProfileEditorTabChange,
   onAvatarFileChange,
@@ -96,13 +93,6 @@ export default function ProfileEditorDialog({
       <DialogTitle>Modifier mon profil</DialogTitle>
       <DialogContent sx={dialogContentSx}>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="body2" sx={{ color: '#64748b' }}>
-            Les changements sont envoyes sur `PATCH /auth/profile` puis
-            repercutes dans la session du front.
-          </Typography>
-
-          {profileError ? <Alert severity="error">{profileError}</Alert> : null}
-
           <Tabs
             value={profileEditorTab}
             onChange={onProfileEditorTabChange}
@@ -149,9 +139,6 @@ export default function ProfileEditorDialog({
                     Supprimer
                   </Button>
                 </Stack>
-                <Typography variant="body2" sx={{ color: '#64748b' }}>
-                  JPG, PNG ou WEBP, 5 Mo maximum.
-                </Typography>
               </Stack>
 
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
@@ -232,13 +219,6 @@ export default function ProfileEditorDialog({
                     slotProps={{ inputLabel: { shrink: true } }}
                   />
                   <TextField
-                    fullWidth
-                    label="Code hex"
-                    placeholder="#FF6600"
-                    value={profileForm.displayColor}
-                    onChange={onProfileFieldChange('displayColor')}
-                  />
-                  <TextField
                     select
                     fullWidth
                     label="Mode"
@@ -263,10 +243,6 @@ export default function ProfileEditorDialog({
               <Stack spacing={2}>
                 <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
                   Visibilité du profil
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#64748b' }}>
-                  Choisissez quelles informations de votre profil peuvent être
-                  affichées publiquement.
                 </Typography>
 
                 <FormControlLabel
@@ -317,9 +293,6 @@ export default function ProfileEditorDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button variant="outlined" onClick={onReset} disabled={profileSaving}>
-          Reinitialiser
-        </Button>
         <Button onClick={onClose} disabled={profileSaving}>
           Annuler
         </Button>

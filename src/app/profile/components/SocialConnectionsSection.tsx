@@ -1,7 +1,7 @@
 'use client';
 
-import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { SocialProfile } from '@/lib/api/social.api';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import {
   Alert,
   Avatar,
@@ -157,10 +157,6 @@ export default function SocialConnectionsSection({
             sx={{ fontWeight: 700, color: '#1a1d24' }}
           >
             Personnes qui me follow
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b' }}>
-            Suppression d&apos;un follower indisponible pour l&apos;instant: le
-            backend n&apos;expose pas encore d&apos;endpoint dedie.
           </Typography>
 
           {socialLoading ? (

@@ -24,11 +24,7 @@ export default function MessagesPage() {
           <Stack spacing={3}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                Messagerie privee
-              </Typography>
-              <Typography sx={{ color: '#64748b', mt: 1 }}>
-                Les conversations sont disponibles uniquement entre utilisateurs
-                qui se suivent mutuellement.
+                Messagerie
               </Typography>
             </Box>
             <MessagesInbox />
