@@ -79,13 +79,6 @@ export default function ProfileHeaderSection({
                   : 'Profil public'
               }
             />
-            {user?.theme ? (
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`Theme ${user.theme}`}
-              />
-            ) : null}
           </Stack>
         </Box>
       </Stack>

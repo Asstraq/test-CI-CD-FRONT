@@ -1,7 +1,7 @@
 'use client';
 
-import { buildProfileHref } from '@/lib/profile/profileHref';
 import type { SocialFollowRequest, SocialProfile } from '@/lib/api/social.api';
+import { buildProfileHref } from '@/lib/profile/profileHref';
 import {
   Avatar,
   Box,
@@ -77,9 +77,6 @@ const FollowRequestsSection = forwardRef<HTMLDivElement, Props>(
             sx={{ fontWeight: 700, color: '#1a1d24' }}
           >
             Invitations
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b' }}>
-            Gérez ici les demandes de follow reçues.
           </Typography>
 
           {loading ? (

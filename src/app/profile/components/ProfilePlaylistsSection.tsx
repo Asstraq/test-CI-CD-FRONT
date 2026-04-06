@@ -14,6 +14,7 @@ import {
   ListItemText,
   Paper,
   Stack,
+  Switch,
   Typography,
 } from '@mui/material';
 
@@ -24,8 +25,6 @@ type Props = {
   onSelectPlaylist: (playlistId: string) => void;
   onOpenCreatePlaylist: () => void;
   displayedPlaylist: Playlist | null;
-  selectedPlaylistForSettings: Playlist | null;
-  selectedPlaylistVisibility: PlaylistVisibility;
   onUpdatePlaylistVisibility: (
     playlist: Playlist,
     visibility: PlaylistVisibility,
@@ -42,8 +41,6 @@ export default function ProfilePlaylistsSection({
   onSelectPlaylist,
   onOpenCreatePlaylist,
   displayedPlaylist,
-  selectedPlaylistForSettings,
-  selectedPlaylistVisibility,
   onUpdatePlaylistVisibility,
   playlistActionId,
   playlistError,
@@ -125,6 +122,26 @@ export default function ProfilePlaylistsSection({
                       </Stack>
                     }
                   />
+                  <Stack
+                    spacing={0.25}
+                    alignItems="center"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Switch
+                      edge="end"
+                      checked={playlist.visibility === 'PUBLIC'}
+                      disabled={playlistActionId === playlist.id}
+                      onChange={(_event, checked) =>
+                        void onUpdatePlaylistVisibility(
+                          playlist,
+                          checked ? 'PUBLIC' : 'PRIVATE',
+                        )
+                      }
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {playlist.visibility === 'PUBLIC' ? 'Publique' : 'Privee'}
+                    </Typography>
+                  </Stack>
                 </ListItemButton>
               </ListItem>
             ))}
@@ -143,76 +160,6 @@ export default function ProfilePlaylistsSection({
         >
           {displayedPlaylist?.name ?? 'Sélectionnez une playlist'}
         </Typography>
-
-        {selectedPlaylistForSettings ? (
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2,
-              mb: 2,
-              borderRadius: 3,
-              backgroundColor: 'rgba(248, 249, 255, 0.92)',
-            }}
-          >
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1.5}
-              alignItems={{ xs: 'flex-start', sm: 'center' }}
-              justifyContent="space-between"
-            >
-              <Box>
-                <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
-                  Visibilite de la playlist
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#64748b' }}>
-                  Choisissez si cette playlist est publique ou privee.
-                </Typography>
-              </Box>
-              <Stack direction="row" spacing={1}>
-                <Button
-                  size="small"
-                  variant={
-                    selectedPlaylistVisibility === 'PRIVATE'
-                      ? 'contained'
-                      : 'outlined'
-                  }
-                  onClick={() =>
-                    void onUpdatePlaylistVisibility(
-                      selectedPlaylistForSettings,
-                      'PRIVATE',
-                    )
-                  }
-                  disabled={
-                    playlistActionId === selectedPlaylistForSettings.id ||
-                    selectedPlaylistVisibility === 'PRIVATE'
-                  }
-                >
-                  Privee
-                </Button>
-                <Button
-                  size="small"
-                  variant={
-                    selectedPlaylistVisibility === 'PUBLIC'
-                      ? 'contained'
-                      : 'outlined'
-                  }
-                  onClick={() =>
-                    void onUpdatePlaylistVisibility(
-                      selectedPlaylistForSettings,
-                      'PUBLIC',
-                    )
-                  }
-                  disabled={
-                    playlistActionId === selectedPlaylistForSettings.id ||
-                    selectedPlaylistVisibility === 'PUBLIC'
-                  }
-                >
-                  Publique
-                </Button>
-              </Stack>
-            </Stack>
-          </Paper>
-        ) : null}
 
         {playlistError ? (
           <Alert severity="error" sx={{ mb: 2 }}>

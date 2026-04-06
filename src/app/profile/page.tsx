@@ -381,16 +381,6 @@ export default function ProfilePage() {
     }
   };
 
-  const selectedPlaylistVisibility =
-    (playlists.find((playlist) => playlist.id === selectedId)?.visibility ??
-      displayedPlaylist?.visibility) === 'PUBLIC'
-      ? 'PUBLIC'
-      : 'PRIVATE';
-
-  const selectedPlaylistForSettings =
-    playlists.find((playlist) => playlist.id === selectedId) ??
-    displayedPlaylist;
-
   const handleProfileFieldChange =
     (field: ProfileTextField) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -426,14 +416,6 @@ export default function ProfilePage() {
     value: ProfileEditorTab,
   ) => {
     setProfileEditorTab(value);
-    setProfileError('');
-    setProfileSuccess('');
-  };
-
-  const handleResetProfileForm = () => {
-    setProfileForm(buildProfileFormState(user));
-    setSelectedAvatarFile(null);
-    setAvatarRemoved(false);
     setProfileError('');
     setProfileSuccess('');
   };
@@ -600,8 +582,6 @@ export default function ProfilePage() {
               onSelectPlaylist={setSelectedId}
               onOpenCreatePlaylist={() => setCreateOpen(true)}
               displayedPlaylist={displayedPlaylist}
-              selectedPlaylistForSettings={selectedPlaylistForSettings}
-              selectedPlaylistVisibility={selectedPlaylistVisibility}
               onUpdatePlaylistVisibility={handleUpdatePlaylistVisibility}
               playlistActionId={playlistActionId}
               playlistError={playlistError}
@@ -622,7 +602,6 @@ export default function ProfilePage() {
         canRemoveAvatar={canRemoveAvatar}
         avatarInputRef={avatarInputRef}
         onClose={handleCloseProfileEditor}
-        onReset={handleResetProfileForm}
         onSave={handleSaveProfile}
         onProfileEditorTabChange={handleProfileEditorTabChange}
         onAvatarFileChange={handleAvatarFileChange}
