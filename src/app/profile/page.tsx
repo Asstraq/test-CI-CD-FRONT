@@ -40,6 +40,8 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   Switch,
   TextField,
   Typography,
@@ -79,9 +81,14 @@ type ProfileFormState = {
   email: string;
   bio: string;
   isProfilePublic: boolean;
+  isPrenomPublic: boolean;
+  isEmailPublic: boolean;
+  isBioPublic: boolean;
   displayColor: string;
   theme: string;
 };
+
+type ProfileEditorTab = 'profile' | 'privacy';
 
 const THEME_COLOR_PRESETS = [
   '#f97316',
@@ -111,6 +118,9 @@ function buildProfileFormState(user?: User | null): ProfileFormState {
     email: user?.email ?? '',
     bio: user?.bio ?? '',
     isProfilePublic: user?.isProfilePublic ?? true,
+    isPrenomPublic: user?.isPrenomPublic ?? true,
+    isEmailPublic: user?.isEmailPublic ?? false,
+    isBioPublic: user?.isBioPublic ?? true,
     displayColor: user?.displayColor ?? '',
     theme: user?.theme ?? 'LIGHT',
   };
@@ -168,6 +178,8 @@ export default function ProfilePage() {
     buildProfileFormState(user),
   );
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [profileEditorTab, setProfileEditorTab] =
+    useState<ProfileEditorTab>('profile');
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
     null,
   );
@@ -244,9 +256,63 @@ export default function ProfilePage() {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
     void loadPlaylists();
-  }, [loadPlaylists, user]);
+  }, [loadPlaylists, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let active = true;
+
+    async function syncCurrentProfile() {
+      try {
+        const response = await AuthAPI.me();
+        if (!active) return;
+        const currentProfile = 'user' in response ? response.user : response;
+        const hasChanged =
+          currentProfile.updatedAt !== user?.updatedAt ||
+          currentProfile.isProfilePublic !== user?.isProfilePublic ||
+          currentProfile.isPrenomPublic !== user?.isPrenomPublic ||
+          currentProfile.isEmailPublic !== user?.isEmailPublic ||
+          currentProfile.isBioPublic !== user?.isBioPublic ||
+          currentProfile.avatarUrl !== user?.avatarUrl ||
+          currentProfile.bio !== user?.bio ||
+          currentProfile.displayColor !== user?.displayColor ||
+          currentProfile.theme !== user?.theme ||
+          currentProfile.nom !== user?.nom ||
+          currentProfile.prenom !== user?.prenom ||
+          currentProfile.pseudo !== user?.pseudo ||
+          currentProfile.email !== user?.email;
+
+        if (hasChanged) {
+          setUser({ user: currentProfile });
+        }
+      } catch {}
+    }
+
+    void syncCurrentProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    setUser,
+    user?.avatarUrl,
+    user?.bio,
+    user?.displayColor,
+    user?.email,
+    user?.id,
+    user?.isBioPublic,
+    user?.isEmailPublic,
+    user?.isPrenomPublic,
+    user?.isProfilePublic,
+    user?.nom,
+    user?.prenom,
+    user?.pseudo,
+    user?.theme,
+    user?.updatedAt,
+  ]);
 
   useEffect(() => {
     setProfileForm(buildProfileFormState(user));
@@ -461,7 +527,12 @@ export default function ProfilePage() {
   };
 
   const handleProfileFieldChange =
-    (field: keyof Omit<ProfileFormState, 'isProfilePublic'>) =>
+    (
+      field: keyof Omit<
+        ProfileFormState,
+        'isProfilePublic' | 'isPrenomPublic' | 'isEmailPublic' | 'isBioPublic'
+      >,
+    ) =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const { value } = event.target;
       setProfileForm((prev) => ({ ...prev, [field]: value }));
@@ -469,13 +540,38 @@ export default function ProfilePage() {
       setProfileSuccess('');
     };
 
-  const handleProfileVisibilityChange = (
-    event: ChangeEvent<HTMLInputElement>,
+  const handleProfileVisibilityChange =
+    (
+      field:
+        | 'isProfilePublic'
+        | 'isPrenomPublic'
+        | 'isEmailPublic'
+        | 'isBioPublic',
+    ) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setProfileForm((prev) => ({
+        ...prev,
+        [field]: event.target.checked,
+      }));
+      setProfileError('');
+      setProfileSuccess('');
+    };
+
+  const handleOpenProfileEditor = (tab: ProfileEditorTab = 'profile') => {
+    setProfileForm(buildProfileFormState(user));
+    setSelectedAvatarFile(null);
+    setAvatarRemoved(false);
+    setProfileError('');
+    setProfileSuccess('');
+    setProfileEditorTab(tab);
+    setProfileEditorOpen(true);
+  };
+
+  const handleProfileEditorTabChange = (
+    _event: React.SyntheticEvent,
+    value: ProfileEditorTab,
   ) => {
-    setProfileForm((prev) => ({
-      ...prev,
-      isProfilePublic: event.target.checked,
-    }));
+    setProfileEditorTab(value);
     setProfileError('');
     setProfileSuccess('');
   };
@@ -486,15 +582,6 @@ export default function ProfilePage() {
     setAvatarRemoved(false);
     setProfileError('');
     setProfileSuccess('');
-  };
-
-  const handleOpenProfileEditor = () => {
-    setProfileForm(buildProfileFormState(user));
-    setSelectedAvatarFile(null);
-    setAvatarRemoved(false);
-    setProfileError('');
-    setProfileSuccess('');
-    setProfileEditorOpen(true);
   };
 
   const handleCloseProfileEditor = () => {
@@ -568,6 +655,9 @@ export default function ProfilePage() {
         email: profileForm.email.trim() || undefined,
         bio: profileForm.bio.trim() || undefined,
         isProfilePublic: profileForm.isProfilePublic,
+        isPrenomPublic: profileForm.isPrenomPublic,
+        isEmailPublic: profileForm.isEmailPublic,
+        isBioPublic: profileForm.isBioPublic,
         displayColor: profileForm.displayColor.trim() || undefined,
         theme: profileForm.theme.trim() || undefined,
       };
@@ -723,10 +813,39 @@ export default function ProfilePage() {
                   </Stack>
                   <Button
                     variant="contained"
-                    onClick={handleOpenProfileEditor}
+                    onClick={() => handleOpenProfileEditor('profile')}
                     sx={{ mt: 1.5, borderRadius: 2 }}
                   >
                     Modifier le profil
+                  </Button>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Confidentialité
+                  </Typography>
+                  <Stack spacing={0.75}>
+                    <Typography sx={{ color: '#1a1d24' }}>
+                      Profil :{' '}
+                      {user?.isProfilePublic === false ? 'Privé' : 'Public'}
+                    </Typography>
+                    <Typography sx={{ color: '#1a1d24' }}>
+                      Prénom :{' '}
+                      {user?.isPrenomPublic === false ? 'Privé' : 'Public'}
+                    </Typography>
+                    <Typography sx={{ color: '#1a1d24' }}>
+                      Email :{' '}
+                      {user?.isEmailPublic === true ? 'Public' : 'Privé'}
+                    </Typography>
+                    <Typography sx={{ color: '#1a1d24' }}>
+                      Bio :{' '}
+                      {user?.isBioPublic === false ? 'Privée' : 'Publique'}
+                    </Typography>
+                  </Stack>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleOpenProfileEditor('privacy')}
+                    sx={{ mt: 1.5, borderRadius: 2 }}
+                  >
+                    Gérer la confidentialité
                   </Button>
                 </Stack>
               </Paper>
@@ -1298,152 +1417,224 @@ export default function ProfilePage() {
               <Alert severity="error">{profileError}</Alert>
             ) : null}
 
-            <Stack spacing={1.5} alignItems="center">
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                style={{ display: 'none' }}
-                onChange={handleAvatarFileChange}
-              />
-              <Avatar
-                src={editorAvatarSrc || undefined}
+            <Tabs
+              value={profileEditorTab}
+              onChange={handleProfileEditorTabChange}
+              variant="fullWidth"
+            >
+              <Tab value="profile" label="Profil" />
+              <Tab value="privacy" label="Confidentialité" />
+            </Tabs>
+
+            {profileEditorTab === 'profile' ? (
+              <>
+                <Stack spacing={1.5} alignItems="center">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={handleAvatarFileChange}
+                  />
+                  <Avatar
+                    src={editorAvatarSrc || undefined}
+                    sx={{
+                      width: 112,
+                      height: 112,
+                      bgcolor: editorAccentColor,
+                      fontSize: 36,
+                    }}
+                  >
+                    {profileInitial}
+                  </Avatar>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Button
+                      variant="contained"
+                      onClick={handleSelectAvatarClick}
+                      disabled={profileSaving}
+                    >
+                      Choisir une photo
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={handleRemoveAvatar}
+                      disabled={profileSaving || !canRemoveAvatar}
+                    >
+                      Supprimer
+                    </Button>
+                  </Stack>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    JPG, PNG ou WEBP, 5 Mo maximum.
+                  </Typography>
+                </Stack>
+
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                  <TextField
+                    fullWidth
+                    label="Nom"
+                    value={profileForm.nom}
+                    onChange={handleProfileFieldChange('nom')}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Prenom"
+                    value={profileForm.prenom}
+                    onChange={handleProfileFieldChange('prenom')}
+                  />
+                </Stack>
+
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                  <TextField
+                    fullWidth
+                    label="Pseudo"
+                    value={profileForm.pseudo}
+                    onChange={handleProfileFieldChange('pseudo')}
+                  />
+                  <TextField
+                    fullWidth
+                    required
+                    label="Email"
+                    type="email"
+                    value={profileForm.email}
+                    onChange={handleProfileFieldChange('email')}
+                  />
+                </Stack>
+
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  label="Bio"
+                  value={profileForm.bio}
+                  onChange={handleProfileFieldChange('bio')}
+                />
+
+                <Stack spacing={1.5}>
+                  <Typography sx={{ fontWeight: 600, color: '#1a1d24' }}>
+                    Couleur du theme
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {THEME_COLOR_PRESETS.map((color) => (
+                      <Box
+                        key={color}
+                        component="button"
+                        type="button"
+                        onClick={() => handleSelectThemeColor(color)}
+                        sx={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: '50%',
+                          border:
+                            profileForm.displayColor === color
+                              ? '3px solid #111827'
+                              : '2px solid rgba(15, 23, 42, 0.12)',
+                          backgroundColor: color,
+                          cursor: 'pointer',
+                        }}
+                      />
+                    ))}
+                  </Stack>
+
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                    <TextField
+                      fullWidth
+                      type="color"
+                      label="Palette"
+                      value={editorAccentColor}
+                      onChange={handleProfileFieldChange('displayColor')}
+                      sx={{ maxWidth: { md: 180 } }}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Code hex"
+                      placeholder="#FF6600"
+                      value={profileForm.displayColor}
+                      onChange={handleProfileFieldChange('displayColor')}
+                    />
+                    <TextField
+                      select
+                      fullWidth
+                      label="Mode"
+                      value={profileForm.theme}
+                      onChange={handleProfileFieldChange('theme')}
+                    >
+                      <MenuItem value="LIGHT">Clair</MenuItem>
+                      <MenuItem value="DARK">Sombre</MenuItem>
+                    </TextField>
+                  </Stack>
+                </Stack>
+              </>
+            ) : (
+              <Paper
+                variant="outlined"
                 sx={{
-                  width: 112,
-                  height: 112,
-                  bgcolor: editorAccentColor,
-                  fontSize: 36,
+                  p: 2,
+                  borderRadius: 3,
+                  backgroundColor: 'rgba(248, 249, 255, 0.92)',
                 }}
               >
-                {profileInitial}
-              </Avatar>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                <Button
-                  variant="contained"
-                  onClick={handleSelectAvatarClick}
-                  disabled={profileSaving}
-                >
-                  Choisir une photo
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={handleRemoveAvatar}
-                  disabled={profileSaving || !canRemoveAvatar}
-                >
-                  Supprimer
-                </Button>
-              </Stack>
-              <Typography variant="body2" sx={{ color: '#64748b' }}>
-                JPG, PNG ou WEBP, 5 Mo maximum.
-              </Typography>
-            </Stack>
+                <Stack spacing={2}>
+                  <Typography sx={{ fontWeight: 700, color: '#1a1d24' }}>
+                    Visibilité du profil
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    Choisissez quelles informations de votre profil peuvent être
+                    affichées publiquement.
+                  </Typography>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                label="Nom"
-                value={profileForm.nom}
-                onChange={handleProfileFieldChange('nom')}
-              />
-              <TextField
-                fullWidth
-                label="Prenom"
-                value={profileForm.prenom}
-                onChange={handleProfileFieldChange('prenom')}
-              />
-            </Stack>
-
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                fullWidth
-                label="Pseudo"
-                value={profileForm.pseudo}
-                onChange={handleProfileFieldChange('pseudo')}
-              />
-              <TextField
-                fullWidth
-                required
-                label="Email"
-                type="email"
-                value={profileForm.email}
-                onChange={handleProfileFieldChange('email')}
-              />
-            </Stack>
-
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              label="Bio"
-              value={profileForm.bio}
-              onChange={handleProfileFieldChange('bio')}
-            />
-
-            <Stack spacing={1.5}>
-              <Typography sx={{ fontWeight: 600, color: '#1a1d24' }}>
-                Couleur du theme
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                {THEME_COLOR_PRESETS.map((color) => (
-                  <Box
-                    key={color}
-                    component="button"
-                    type="button"
-                    onClick={() => handleSelectThemeColor(color)}
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: '50%',
-                      border:
-                        profileForm.displayColor === color
-                          ? '3px solid #111827'
-                          : '2px solid rgba(15, 23, 42, 0.12)',
-                      backgroundColor: color,
-                      cursor: 'pointer',
-                    }}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={profileForm.isProfilePublic}
+                        onChange={handleProfileVisibilityChange(
+                          'isProfilePublic',
+                        )}
+                      />
+                    }
+                    label="Profil public"
                   />
-                ))}
-              </Stack>
+                  <Typography variant="body2" sx={{ color: '#64748b', mt: -1 }}>
+                    Désactivé : votre profil n’est plus consultable
+                    publiquement.
+                  </Typography>
 
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                <TextField
-                  fullWidth
-                  type="color"
-                  label="Palette"
-                  value={editorAccentColor}
-                  onChange={handleProfileFieldChange('displayColor')}
-                  sx={{ maxWidth: { md: 180 } }}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-                <TextField
-                  fullWidth
-                  label="Code hex"
-                  placeholder="#FF6600"
-                  value={profileForm.displayColor}
-                  onChange={handleProfileFieldChange('displayColor')}
-                />
-                <TextField
-                  select
-                  fullWidth
-                  label="Mode"
-                  value={profileForm.theme}
-                  onChange={handleProfileFieldChange('theme')}
-                >
-                  <MenuItem value="LIGHT">Clair</MenuItem>
-                  <MenuItem value="DARK">Sombre</MenuItem>
-                </TextField>
-              </Stack>
-            </Stack>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={profileForm.isPrenomPublic}
+                        onChange={handleProfileVisibilityChange(
+                          'isPrenomPublic',
+                        )}
+                      />
+                    }
+                    label="Afficher mon prénom"
+                  />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={profileForm.isProfilePublic}
-                  onChange={handleProfileVisibilityChange}
-                />
-              }
-              label="Profil public"
-            />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={profileForm.isEmailPublic}
+                        onChange={handleProfileVisibilityChange(
+                          'isEmailPublic',
+                        )}
+                      />
+                    }
+                    label="Afficher mon email"
+                  />
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={profileForm.isBioPublic}
+                        onChange={handleProfileVisibilityChange('isBioPublic')}
+                      />
+                    }
+                    label="Afficher ma bio"
+                  />
+                </Stack>
+              </Paper>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
