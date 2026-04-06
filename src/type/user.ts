@@ -16,6 +16,8 @@ export type User = {
   isBioPublic?: boolean;
   displayColor?: string;
   theme?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ResponseAPIUser = {
