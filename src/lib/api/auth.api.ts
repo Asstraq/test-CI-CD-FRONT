@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/http';
+import { BACKEND_URL } from '@/lib/config';
 import { ResponseAPIUser, UpdateProfilePayload, User } from '@/type/user';
 
 export function login(email: string, password: string) {
@@ -19,6 +20,28 @@ export function register(email: string, password: string, nom?: string) {
 
 export function logout() {
   return api<{ ok: true }>('/auth/logout', { method: 'POST' });
+}
+
+type GoogleCallbackResponse = {
+  status: 'ok';
+  token: string;
+  google: {
+    id: string;
+    displayName: string;
+    email: string;
+    avatarUrl: string | null;
+  };
+};
+
+export function getGoogleAuthUrl() {
+  return `${BACKEND_URL}/auth/google`;
+}
+
+export function completeGoogleAuth(code: string, state: string) {
+  const search = new URLSearchParams({ code, state }).toString();
+  return api<GoogleCallbackResponse>(`/auth/google/callback?${search}`, {
+    auth: false,
+  });
 }
 
 export function me() {

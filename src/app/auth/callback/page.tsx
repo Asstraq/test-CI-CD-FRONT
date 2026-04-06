@@ -1,8 +1,9 @@
 'use client';
 
-import { me } from '@/lib/api/auth.api';
+import { completeGoogleAuth, me, updateProfile } from '@/lib/api/auth.api';
 import { clearToken, setToken } from '@/lib/auth/token';
 import { useUserSession } from '@/lib/auth/userSession';
+import type { UpdateProfilePayload, User } from '@/type/user';
 import { Alert, CircularProgress, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -43,6 +44,41 @@ const Message = styled(Typography)({
   color: '#6b7280',
 });
 
+type GoogleIdentity = {
+  id: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string | null;
+};
+
+function buildGoogleProfilePatch(
+  google: GoogleIdentity | null,
+  user: User,
+): UpdateProfilePayload | null {
+  if (!google) return null;
+
+  const displayName = google.displayName.trim();
+  const nameParts = displayName.split(/\s+/).filter(Boolean);
+  const nextPrenom =
+    !user.prenom?.trim() && nameParts.length > 1 ? nameParts[0] : undefined;
+  const nextNom = !user.nom?.trim()
+    ? nameParts.length > 1
+      ? nameParts.slice(1).join(' ')
+      : displayName || undefined
+    : undefined;
+
+  const patch: UpdateProfilePayload = {
+    nom: nextNom,
+    prenom: nextPrenom,
+    email: !user.email?.trim() ? google.email : undefined,
+    avatarUrl: !user.avatarUrl?.trim() ? google.avatarUrl : undefined,
+  };
+
+  return Object.values(patch).some((value) => value !== undefined)
+    ? patch
+    : null;
+}
+
 export default function AuthCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,22 +89,46 @@ export default function AuthCallbackPage() {
     let active = true;
 
     async function completeAuthentication() {
+      const oauthError = searchParams.get('error');
+      const code = searchParams.get('code');
+      const state = searchParams.get('state');
       const token = searchParams.get('token');
 
-      if (!token) {
+      if (oauthError) {
         clearToken();
         clearUser();
         if (active) {
-          setError('Token OAuth manquant.');
+          setError(oauthError);
+          router.replace('/auth');
+        }
+        return;
+      }
+
+      if (!token && !(code && state)) {
+        clearToken();
+        clearUser();
+        if (active) {
+          setError('Paramètres OAuth manquants.');
           router.replace('/auth');
         }
         return;
       }
 
       try {
-        setToken(token);
+        const googleAuth = token
+          ? null
+          : await completeGoogleAuth(code!, state!);
+        const nextToken = token ?? googleAuth!.token;
+        setToken(nextToken);
         const response = await me();
-        const user = 'user' in response ? response.user : response;
+        let user = 'user' in response ? response.user : response;
+        const patch = buildGoogleProfilePatch(googleAuth?.google ?? null, user);
+
+        if (patch) {
+          const updatedResponse = await updateProfile(patch);
+          user =
+            'user' in updatedResponse ? updatedResponse.user : updatedResponse;
+        }
 
         if (!active) return;
 
