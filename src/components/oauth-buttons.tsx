@@ -1,29 +1,24 @@
 'use client';
 
-import { BACKEND_URL } from '@/lib/config';
+import { getGoogleAuthUrl, getMicrosoftAuthUrl } from '@/lib/api/auth.api';
 import { Button, Stack, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Image from 'next/image';
 
-type ProviderId = 'google' | 'github' | 'spotify';
-
-const providers: {
-  id: ProviderId;
-  label: string;
-}[] = [
+const providers = [
   {
     id: 'google',
     label: 'Continuer avec Google',
+    icon: '/logoOauth/google.png',
+    getUrl: getGoogleAuthUrl,
   },
   {
-    id: 'github',
-    label: 'Continuer avec Github',
+    id: 'microsoft',
+    label: 'Continuer avec Microsoft',
+    icon: '/logoOauth/microsoft.png',
+    getUrl: getMicrosoftAuthUrl,
   },
-  {
-    id: 'spotify',
-    label: 'Continuer avec Spotify',
-  },
-];
+] as const;
 
 const Wrapper = styled('div')({
   marginTop: '12px',
@@ -40,9 +35,9 @@ const SectionTitle = styled(Typography)({
   textAlign: 'center',
 });
 
-export function OAuthButtons({ basePath = '/auth' }) {
-  const handleClick = (provider: ProviderId) => {
-    window.location.assign(`${BACKEND_URL}${basePath}/${provider}`);
+export function OAuthButtons() {
+  const handleClick = (url: string) => {
+    window.location.assign(url);
   };
 
   return (
@@ -53,7 +48,7 @@ export function OAuthButtons({ basePath = '/auth' }) {
           <Button
             key={provider.id}
             variant="outlined"
-            onClick={() => handleClick(provider.id)}
+            onClick={() => handleClick(provider.getUrl())}
             sx={{
               textTransform: 'none',
               borderColor: 'rgba(31, 41, 55, 0.2)',
@@ -68,7 +63,7 @@ export function OAuthButtons({ basePath = '/auth' }) {
               width={24}
               height={24}
               alt={`logo of ${provider.id}`}
-              src={`/logoOauth/${provider.id}.png`}
+              src={provider.icon}
               style={{ marginRight: 12 }}
             />
             {provider.label}
