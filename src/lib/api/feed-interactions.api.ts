@@ -117,7 +117,10 @@ export async function createReviewComment(reviewId: string, content: string) {
     },
   );
 
-  const comment = 'comment' in response ? response.comment : response;
+  const comment: ReviewCommentDto | null | undefined =
+    'comment' in response
+      ? (response as CreateReviewCommentResponse).comment
+      : (response as ReviewCommentDto);
 
   return comment ? buildFeedComment(comment) : null;
 }
