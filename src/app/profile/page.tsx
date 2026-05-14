@@ -37,9 +37,9 @@ import type { UpdateProfilePayload, User } from '@/type/user';
 import { Alert, Box, Container, Divider, Paper, Stack } from '@mui/material';
 import { useSearchParams } from 'next/navigation';
 import type { ChangeEvent, SyntheticEvent } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const searchParams = useSearchParams();
   const { user: userObject, setUser } = useUserSession();
   const user = userObject?.user;
@@ -635,5 +635,13 @@ export default function ProfilePage() {
         onFollowBack={handleFollowBack}
       />
     </Box>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense>
+      <ProfilePageContent />
+    </Suspense>
   );
 }

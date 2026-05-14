@@ -31,14 +31,14 @@ import {
 } from '@mui/material';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 
 function buildHandle(name: string, fallback = 'utilisateur') {
   const base = name.trim() || fallback;
   return `@${base.replace(/\s+/g, '').toLowerCase()}`;
 }
 
-export default function PublicProfilePage() {
+function PublicProfilePageContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -656,5 +656,13 @@ export default function PublicProfilePage() {
         </Paper>
       </Container>
     </Box>
+  );
+}
+
+export default function PublicProfilePage() {
+  return (
+    <Suspense>
+      <PublicProfilePageContent />
+    </Suspense>
   );
 }
