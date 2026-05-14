@@ -12,7 +12,7 @@ import type { UpdateProfilePayload, User } from '@/type/user';
 import { Alert, CircularProgress, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 const Page = styled('div')({
   minHeight: '100vh',
@@ -111,7 +111,7 @@ function buildOAuthProfilePatch(
     : null;
 }
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -211,5 +211,22 @@ export default function AuthCallbackPage() {
         {error ? <Alert severity="error">{error}</Alert> : null}
       </Card>
     </Page>
+  );
+}
+
+const Fallback = () => (
+  <Page>
+    <Card>
+      <CircularProgress sx={{ color: '#ea580c' }} />
+      <Title>Connexion en cours</Title>
+    </Card>
+  </Page>
+);
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<Fallback />}>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
