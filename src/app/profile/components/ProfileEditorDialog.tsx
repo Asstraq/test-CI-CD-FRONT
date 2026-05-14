@@ -65,7 +65,6 @@ export default function ProfileEditorDialog({
   profileEditorTab,
   profileForm,
   profileSaving,
-  profileError,
   profileInitial,
   editorAvatarSrc,
   editorAccentColor,
