@@ -98,6 +98,7 @@ export default function FloatingMessenger() {
 
   useEffect(() => {
     if (!open || !activeConversationId) return;
+    const conversationId = activeConversationId;
 
     let active = true;
 
@@ -106,15 +107,15 @@ export default function FloatingMessenger() {
         setLoadingMessages(true);
         setError('');
         const nextMessages = sortMessages(
-          await listConversationMessages(activeConversationId),
+          await listConversationMessages(conversationId),
         );
         if (!active) return;
         setMessages(nextMessages);
-        await markConversationRead(activeConversationId);
+        await markConversationRead(conversationId);
         if (!active) return;
         setConversations((prev) =>
           prev.map((conversation) =>
-            conversation.id === activeConversationId
+            conversation.id === conversationId
               ? { ...conversation, unreadCount: 0 }
               : conversation,
           ),
