@@ -37,7 +37,14 @@ import type { UpdateProfilePayload, User } from '@/type/user';
 import { Alert, Box, Container, Divider, Paper, Stack } from '@mui/material';
 import { useSearchParams } from 'next/navigation';
 import type { ChangeEvent, SyntheticEvent } from 'react';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 function ProfilePageContent() {
   const searchParams = useSearchParams();
